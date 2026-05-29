@@ -10,6 +10,7 @@ import Layout from '@/components/Layout';
 const Dashboard = lazy(() => import('@/pages/Dashboard'));
 const Recommend = lazy(() => import('@/pages/Recommend'));
 const Analyze = lazy(() => import('@/pages/Analyze'));
+const Chat = lazy(() => import('@/pages/Chat'));
 const History = lazy(() => import('@/pages/History'));
 const HistoryDetail = lazy(() => import('@/pages/HistoryDetail'));
 const Portfolio = lazy(() => import('@/pages/Portfolio'));
@@ -86,6 +87,14 @@ export default function App() {
               element={
                 <Suspense fallback={<PageLoader />}>
                   <Analyze />
+                </Suspense>
+              }
+            />
+            <Route
+              path="/chat"
+              element={
+                <Suspense fallback={<PageLoader />}>
+                  <Chat />
                 </Suspense>
               }
             />

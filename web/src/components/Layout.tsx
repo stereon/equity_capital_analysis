@@ -1,11 +1,12 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { LayoutDashboard, Sparkles, LineChart, History, Activity, Briefcase, Bell, TrendingUp, Settings as SettingsIcon } from 'lucide-react';
+import { LayoutDashboard, Sparkles, LineChart, History, Activity, Briefcase, Bell, TrendingUp, MessageSquare, Settings as SettingsIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const nav = [
   { to: '/', label: '大盘', icon: LayoutDashboard, end: true },
   { to: '/recommend', label: '荐股', icon: Sparkles },
   { to: '/analyze', label: '分析', icon: LineChart },
+  { to: '/chat', label: '对话', icon: MessageSquare },
   { to: '/portfolio', label: '持仓', icon: Briefcase },
   { to: '/alerts', label: '告警', icon: Bell },
   { to: '/backtest', label: '回测', icon: TrendingUp },

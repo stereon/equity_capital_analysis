@@ -38,6 +38,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -53,6 +54,12 @@ SERVER_NAME = "claude-openai-shim"
 DEFAULT_MODEL_ID = "claude-local"
 DEFAULT_PORT = 8766
 MAX_ERROR_TEXT = 4000
+
+# ReAct 风格的伪 tool_call:Claude 本地 CLI 不支持原生 OpenAI tool_calls,
+# 用 fenced code block 约定让模型用 JSON 输出调用意图,shim 解析后包装成 tool_calls。
+TOOL_CALL_FENCE_OPEN = "```tool_call"
+TOOL_CALL_FENCE_CLOSE = "```"
+TOOL_CALL_BLOCK_RE = re.compile(r"```tool_call\s*\n(.*?)\n```", re.DOTALL)
 
 
 class ClaudeShimError(RuntimeError):
@@ -103,6 +110,62 @@ def _content_to_text(content: Any) -> str:
     return str(content)
 
 
+def _format_tools_section(tools: List[Dict[str, Any]]) -> str:
+    """把 OpenAI tools 列表渲染成 prompt 里的工具使用说明。"""
+    lines: List[str] = [
+        "## Available tools",
+        "",
+        "You have access to the following tools. When you need to call a tool,",
+        "emit a fenced code block with the language tag `tool_call`. Each block",
+        "must contain a JSON object with keys `name` (string) and `arguments`",
+        "(object). You may emit multiple blocks in the same response when the",
+        "calls are independent. Do not write commentary like \"calling X now\";",
+        "just emit the block.",
+        "",
+        "Example:",
+        TOOL_CALL_FENCE_OPEN,
+        '{"name": "get_realtime_quote", "arguments": {"stock_code": "002949"}}',
+        TOOL_CALL_FENCE_CLOSE,
+        "",
+        "Once you have all data you need, write your final answer as plain text",
+        "(do NOT emit any more `tool_call` blocks in that final turn).",
+        "",
+        "### Tool list",
+    ]
+    for t in tools or []:
+        fn = (t or {}).get("function") or {}
+        name = fn.get("name") or "?"
+        desc = str(fn.get("description") or "").strip()
+        params = fn.get("parameters") or {}
+        try:
+            params_json = json.dumps(params, ensure_ascii=False)
+        except Exception:
+            params_json = "{}"
+        lines.append(f"- **{name}**: {desc}")
+        lines.append(f"  arguments schema: `{params_json}`")
+    return "\n".join(lines)
+
+
+def _format_tool_calls_for_prompt(tool_calls: List[Dict[str, Any]]) -> str:
+    """把 assistant 历史消息里的 tool_calls 渲染成 fenced block,让模型看到自己之前调过什么。"""
+    blocks: List[str] = []
+    for tc in tool_calls or []:
+        fn = (tc or {}).get("function") or {}
+        name = fn.get("name") or "?"
+        args = fn.get("arguments")
+        if isinstance(args, str):
+            try:
+                args = json.loads(args)
+            except Exception:
+                args = {"_raw": args}
+        try:
+            payload = json.dumps({"name": name, "arguments": args or {}}, ensure_ascii=False)
+        except Exception:
+            payload = '{"name": "?", "arguments": {}}'
+        blocks.append(f"{TOOL_CALL_FENCE_OPEN}\n{payload}\n{TOOL_CALL_FENCE_CLOSE}")
+    return "\n".join(blocks)
+
+
 def _messages_to_prompt(payload: Dict[str, Any]) -> str:
     messages = payload.get("messages")
     if not isinstance(messages, list) or not messages:
@@ -120,26 +183,74 @@ def _messages_to_prompt(payload: Dict[str, Any]) -> str:
 
     tools = payload.get("tools")
     if tools:
-        parts.append(
-            "Compatibility note: the caller included tool definitions, but this Claude shim cannot "
-            "return OpenAI tool_calls. Provide the best final answer directly from the supplied context."
-        )
+        parts.append("")
+        parts.append(_format_tools_section(tools))
 
     parts.append("\n--- conversation ---")
     for message in messages:
         if not isinstance(message, dict):
             continue
         role = str(message.get("role") or "user")
+        if role == "tool":
+            # OpenAI tool 消息:把工具结果转成 prompt 中的 [tool_result] 段
+            tool_call_id = message.get("tool_call_id") or ""
+            tool_name = message.get("name") or ""
+            content = _content_to_text(message.get("content")).strip()
+            header = "tool_result"
+            if tool_name:
+                header += f" name={tool_name}"
+            if tool_call_id:
+                header += f" call_id={tool_call_id}"
+            parts.append(f"\n[{header}]\n{content}")
+            continue
+
         name = message.get("name")
         label = role if not name else f"{role} ({name})"
         content = _content_to_text(message.get("content")).strip()
         tool_calls = message.get("tool_calls")
         if tool_calls:
-            content = f"{content}\n[tool_calls]\n{json.dumps(tool_calls, ensure_ascii=False)}".strip()
+            rendered = _format_tool_calls_for_prompt(tool_calls)
+            content = f"{content}\n{rendered}".strip() if content else rendered
         parts.append(f"\n[{label}]\n{content}")
 
     parts.append("\n--- response ---")
     return "\n".join(parts).strip()
+
+
+def _parse_tool_calls(text: str) -> Tuple[str, List[Dict[str, Any]]]:
+    """从 Claude 响应里提取 `tool_call` 代码块,返回 (剩余文本, OpenAI 格式的 tool_calls)。"""
+    matches = TOOL_CALL_BLOCK_RE.findall(text or "")
+    if not matches:
+        return text, []
+    tool_calls: List[Dict[str, Any]] = []
+    for body in matches:
+        try:
+            obj = json.loads(body.strip())
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(obj, dict):
+            continue
+        name = obj.get("name")
+        args = obj.get("arguments")
+        if args is None:
+            args = obj.get("args")
+        if not isinstance(name, str) or not name:
+            continue
+        if not isinstance(args, (dict, list)):
+            args = {}
+        try:
+            args_json = json.dumps(args, ensure_ascii=False)
+        except Exception:
+            args_json = "{}"
+        tool_calls.append({
+            "id": f"call_{uuid.uuid4().hex[:24]}",
+            "type": "function",
+            "function": {"name": name, "arguments": args_json},
+        })
+    if not tool_calls:
+        return text, []
+    residual = TOOL_CALL_BLOCK_RE.sub("", text or "").strip()
+    return residual, tool_calls
 
 
 def _tail(text: str, limit: int = MAX_ERROR_TEXT) -> str:
@@ -198,28 +309,35 @@ def run_claude(prompt: str) -> str:
     return text
 
 
-def _completion_payload(model: str, text: str, request_id: str) -> Dict[str, Any]:
+def _completion_payload(
+    model: str,
+    text: str,
+    request_id: str,
+    tool_calls: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
+    message: Dict[str, Any] = {"role": "assistant", "content": text if text else None}
+    if tool_calls:
+        message["tool_calls"] = tool_calls
+        finish_reason = "tool_calls"
+    else:
+        finish_reason = "stop"
     return {
         "id": request_id,
         "object": "chat.completion",
         "created": _now(),
         "model": model,
-        "choices": [
-            {
-                "index": 0,
-                "message": {"role": "assistant", "content": text},
-                "finish_reason": "stop",
-            }
-        ],
-        "usage": {
-            "prompt_tokens": 0,
-            "completion_tokens": 0,
-            "total_tokens": 0,
-        },
+        "choices": [{"index": 0, "message": message, "finish_reason": finish_reason}],
+        "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
     }
 
 
-def _stream_chunks(model: str, text: str, request_id: str, chunk_size: int = 1200) -> Iterable[Dict[str, Any]]:
+def _stream_chunks(
+    model: str,
+    text: str,
+    request_id: str,
+    tool_calls: Optional[List[Dict[str, Any]]] = None,
+    chunk_size: int = 1200,
+) -> Iterable[Dict[str, Any]]:
     created = _now()
     yield {
         "id": request_id,
@@ -228,19 +346,58 @@ def _stream_chunks(model: str, text: str, request_id: str, chunk_size: int = 120
         "model": model,
         "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}],
     }
+    if tool_calls:
+        # OpenAI tool_calls stream:每个 tool_call 单独成 chunk(index 递增),最后 finish_reason=tool_calls
+        for i, tc in enumerate(tool_calls):
+            yield {
+                "id": request_id,
+                "object": "chat.completion.chunk",
+                "created": created,
+                "model": model,
+                "choices": [{
+                    "index": 0,
+                    "delta": {
+                        "tool_calls": [{
+                            "index": i,
+                            "id": tc.get("id"),
+                            "type": "function",
+                            "function": {
+                                "name": (tc.get("function") or {}).get("name"),
+                                "arguments": (tc.get("function") or {}).get("arguments", ""),
+                            },
+                        }],
+                    },
+                    "finish_reason": None,
+                }],
+            }
+        if text:
+            yield {
+                "id": request_id,
+                "object": "chat.completion.chunk",
+                "created": created,
+                "model": model,
+                "choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}],
+            }
+        yield {
+            "id": request_id,
+            "object": "chat.completion.chunk",
+            "created": created,
+            "model": model,
+            "choices": [{"index": 0, "delta": {}, "finish_reason": "tool_calls"}],
+        }
+        return
+
     for start in range(0, len(text), chunk_size):
         yield {
             "id": request_id,
             "object": "chat.completion.chunk",
             "created": created,
             "model": model,
-            "choices": [
-                {
-                    "index": 0,
-                    "delta": {"content": text[start:start + chunk_size]},
-                    "finish_reason": None,
-                }
-            ],
+            "choices": [{
+                "index": 0,
+                "delta": {"content": text[start:start + chunk_size]},
+                "finish_reason": None,
+            }],
         }
     yield {
         "id": request_id,
@@ -317,22 +474,32 @@ class ClaudeOpenAIHandler(BaseHTTPRequestHandler):
             request_id = f"chatcmpl-claude-{uuid.uuid4().hex}"
             prompt = _messages_to_prompt(payload)
             text = run_claude(prompt)
+            residual_text, tool_calls = _parse_tool_calls(text) if payload.get("tools") else (text, [])
             if payload.get("stream"):
-                self._send_stream(model, text, request_id)
+                self._send_stream(model, residual_text, request_id, tool_calls=tool_calls or None)
             else:
-                self._send_json(200, _completion_payload(model, text, request_id))
+                self._send_json(
+                    200,
+                    _completion_payload(model, residual_text, request_id, tool_calls=tool_calls or None),
+                )
         except ClaudeShimError as exc:
             self._send_error_json(exc.status_code, str(exc))
         except Exception as exc:  # pragma: no cover - defensive server boundary
             self._send_error_json(500, f"Unexpected shim error: {exc}")
 
-    def _send_stream(self, model: str, text: str, request_id: str) -> None:
+    def _send_stream(
+        self,
+        model: str,
+        text: str,
+        request_id: str,
+        tool_calls: Optional[List[Dict[str, Any]]] = None,
+    ) -> None:
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-cache")
         self.send_header("Connection", "close")
         self.end_headers()
-        for chunk in _stream_chunks(model, text, request_id):
+        for chunk in _stream_chunks(model, text, request_id, tool_calls=tool_calls):
             line = f"data: {json.dumps(chunk, ensure_ascii=False, separators=(',', ':'))}\n\n"
             self.wfile.write(line.encode("utf-8"))
             self.wfile.flush()
