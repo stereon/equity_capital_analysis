@@ -303,7 +303,7 @@ class TestEmailSender(unittest.TestCase):
             email_sender="a@qq.com",
             email_password="p",
             email_receivers=["b@qq.com"],
-            email_sender_name="daily_stock_analysis股票分析助手",
+            email_sender_name="equity_capital_analysis股票分析助手",
         )
         sender = EmailSender(cfg)
 
@@ -317,7 +317,7 @@ class TestEmailSender(unittest.TestCase):
         self.assertEqual(addr, "a@qq.com")
         self.assertEqual(
             str(make_header(decode_header(realname))),
-            "daily_stock_analysis股票分析助手",
+            "equity_capital_analysis股票分析助手",
         )
         server.quit.assert_called_once()
 
@@ -327,7 +327,7 @@ class TestEmailSender(unittest.TestCase):
             email_sender="a@qq.com",
             email_password="p",
             email_receivers=["b@qq.com"],
-            email_sender_name="daily_stock_analysis股票分析助手",
+            email_sender_name="equity_capital_analysis股票分析助手",
         )
         sender = EmailSender(cfg)
 
@@ -341,7 +341,7 @@ class TestEmailSender(unittest.TestCase):
         self.assertEqual(addr, "a@qq.com")
         self.assertEqual(
             str(make_header(decode_header(realname))),
-            "daily_stock_analysis股票分析助手",
+            "equity_capital_analysis股票分析助手",
         )
         server.quit.assert_called_once()
 

@@ -338,14 +338,14 @@ docker-compose -f ./docker/docker-compose.yml up -d
 
 ```bash
 # Initialize git (if not already)
-cd /path/to/daily_stock_analysis
+cd /path/to/equity_capital_analysis
 git init
 git add .
 git commit -m "Initial commit"
 
 # Create GitHub repo and push
 # After creating new repo on GitHub web:
-git remote add origin https://github.com/your-username/daily_stock_analysis.git
+git remote add origin https://github.com/your-username/equity_capital_analysis.git
 git branch -M main
 git push -u origin main
 ```

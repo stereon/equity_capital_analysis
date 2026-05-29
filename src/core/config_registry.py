@@ -89,11 +89,11 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：环境变量完整列表",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
             {
                 "label": "Tushare 股票列表指南",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/TUSHARE_STOCK_LIST_GUIDE.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/TUSHARE_STOCK_LIST_GUIDE.md",
             },
         ],
         "warning_codes": [],
@@ -123,11 +123,11 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "LLM 配置指南",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md",
             },
             {
                 "label": "完整指南：AI 模型配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#ai-模型配置",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#ai-模型配置",
             },
         ],
         "warning_codes": ["provider_prefix_required"],
@@ -153,11 +153,11 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "LLM 配置指南",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md",
             },
             {
                 "label": "完整指南：AI 模型配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#ai-模型配置",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#ai-模型配置",
             },
         ],
         "warning_codes": ["inherits_primary_when_empty"],
@@ -183,11 +183,11 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "LLM 配置指南",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md",
             },
             {
                 "label": "完整指南：AI 模型配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#ai-模型配置",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#ai-模型配置",
             },
         ],
         "warning_codes": ["fallback_models_must_be_available"],
@@ -215,7 +215,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "LLM 配置指南：YAML 模式",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md#方式三litellm-原生-yaml-配置适合专家或复杂路由",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md#方式三litellm-原生-yaml-配置适合专家或复杂路由",
             },
         ],
         "warning_codes": ["yaml_config_overrides_channel_editor"],
@@ -243,11 +243,11 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "LLM 配置指南：渠道模式",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md#方式二渠道channels模式配置适合进阶多模型",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md#方式二渠道channels模式配置适合进阶多模型",
             },
             {
                 "label": "LLM 服务商配置速查",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/llm-providers.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/llm-providers.md",
             },
         ],
         "warning_codes": ["channels_override_legacy_keys"],
@@ -273,7 +273,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：AI 模型配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#ai-模型配置",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#ai-模型配置",
             },
         ],
         "warning_codes": [],
@@ -298,11 +298,11 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "LLM 配置指南",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md",
             },
             {
                 "label": "LLM 服务商配置速查",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/llm-providers.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/llm-providers.md",
             },
         ],
         "warning_codes": ["secret_value"],
@@ -373,11 +373,11 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "LLM 配置指南",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md",
             },
             {
                 "label": "LLM 服务商配置速查",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/llm-providers.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/llm-providers.md",
             },
         ],
         "warning_codes": ["secret_value"],
@@ -416,11 +416,11 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "Tushare 股票列表指南",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/TUSHARE_STOCK_LIST_GUIDE.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/TUSHARE_STOCK_LIST_GUIDE.md",
             },
             {
                 "label": "完整指南：环境变量完整列表",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": ["secret_value"],
@@ -459,7 +459,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：数据源配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#数据源配置",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#数据源配置",
             },
         ],
         "warning_codes": ["provider_priority_order"],
@@ -485,7 +485,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：数据源配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#数据源配置",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#数据源配置",
             },
         ],
         "warning_codes": [],
@@ -510,7 +510,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：搜索服务配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#搜索服务配置",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#搜索服务配置",
             },
         ],
         "warning_codes": ["secret_value", "comma_separated_keys"],
@@ -536,7 +536,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：搜索服务配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#搜索服务配置",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#搜索服务配置",
             },
         ],
         "warning_codes": ["secret_value", "comma_separated_keys"],
@@ -623,7 +623,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：搜索服务配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#搜索服务配置",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#搜索服务配置",
             },
         ],
         "warning_codes": ["requires_json_format"],
@@ -663,7 +663,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：数据源配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#数据源配置",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#数据源配置",
             },
         ],
         "warning_codes": [],
@@ -689,7 +689,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：数据源配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#数据源配置",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#数据源配置",
             },
         ],
         "warning_codes": ["cloud_deployments_may_disable"],
@@ -715,7 +715,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：环境变量完整列表",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -741,7 +741,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：环境变量完整列表",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -823,11 +823,11 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "LLM 配置指南",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md",
             },
             {
                 "label": "LLM 服务商配置速查",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/llm-providers.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/llm-providers.md",
             },
         ],
         "warning_codes": ["secret_value"],
@@ -910,11 +910,11 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "LLM 配置指南",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md",
             },
             {
                 "label": "LLM 服务商配置速查",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/llm-providers.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/llm-providers.md",
             },
         ],
         "warning_codes": ["secret_value"],
@@ -954,11 +954,11 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "LLM 配置指南",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md",
             },
             {
                 "label": "LLM 服务商配置速查",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/llm-providers.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/llm-providers.md",
             },
         ],
         "warning_codes": ["base_url_must_match_provider"],
@@ -1026,11 +1026,11 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "LLM 配置指南",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md",
             },
             {
                 "label": "LLM 服务商配置速查",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/llm-providers.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/llm-providers.md",
             },
         ],
         "warning_codes": ["secret_value"],
@@ -1111,7 +1111,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：通知渠道配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#通知渠道详细配置",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#通知渠道详细配置",
             },
         ],
         "warning_codes": ["webhook_secret_value"],
@@ -1180,7 +1180,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：自定义 Webhook",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#自定义-webhook",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#自定义-webhook",
             },
         ],
         "warning_codes": ["json_template_must_render_object"],
@@ -1239,7 +1239,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：自定义 Webhook",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#自定义-webhook",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#自定义-webhook",
             },
         ],
         "warning_codes": ["disabling_ssl_verify_is_risky"],
@@ -1265,7 +1265,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：环境变量完整列表",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -1291,7 +1291,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：环境变量完整列表",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -1324,11 +1324,11 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：飞书通知配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#飞书",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#飞书",
             },
             {
                 "label": "飞书机器人配置专题",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/bot/feishu-bot-config.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/bot/feishu-bot-config.md",
             },
         ],
         "warning_codes": ["feishu_webhook_not_app_secret"],
@@ -1413,7 +1413,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：Telegram",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#telegram",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#telegram",
             },
         ],
         "warning_codes": ["secret_value"],
@@ -1439,7 +1439,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：Telegram",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#telegram",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#telegram",
             },
         ],
         "warning_codes": [],
@@ -1483,7 +1483,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：邮件",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#邮件",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#邮件",
             },
         ],
         "warning_codes": [],
@@ -1508,7 +1508,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：邮件",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#邮件",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#邮件",
             },
         ],
         "warning_codes": ["secret_value", "smtp_authorization_code"],
@@ -1535,7 +1535,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：邮件",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#邮件",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#邮件",
             },
         ],
         "warning_codes": ["comma_separated_values"],
@@ -1563,7 +1563,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：Discord",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#discord",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#discord",
             },
         ],
         "warning_codes": ["webhook_secret_value"],
@@ -1589,7 +1589,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：Discord",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#discord",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#discord",
             },
         ],
         "warning_codes": ["secret_value"],
@@ -1646,7 +1646,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：通知渠道配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#通知渠道详细配置",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#通知渠道详细配置",
             },
         ],
         "warning_codes": ["secret_value"],
@@ -1855,7 +1855,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：环境变量完整列表",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -1882,7 +1882,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：环境变量完整列表",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -1911,7 +1911,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：环境变量完整列表",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -1937,7 +1937,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：环境变量完整列表",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -1963,7 +1963,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：环境变量完整列表",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -1989,7 +1989,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：环境变量完整列表",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -2015,7 +2015,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：环境变量完整列表",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -2041,7 +2041,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：环境变量完整列表",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -2067,7 +2067,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：环境变量完整列表",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -2093,7 +2093,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "通知渠道与路由",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/notifications.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/notifications.md",
             },
         ],
         "warning_codes": [],
@@ -2119,7 +2119,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "通知渠道与路由",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/notifications.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/notifications.md",
             },
         ],
         "warning_codes": [],
@@ -2145,7 +2145,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "通知渠道与路由",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/notifications.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/notifications.md",
             },
         ],
         "warning_codes": [],
@@ -2171,7 +2171,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "通知渠道与路由",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/notifications.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/notifications.md",
             },
         ],
         "warning_codes": [],
@@ -2197,7 +2197,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "通知渠道与路由",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/notifications.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/notifications.md",
             },
         ],
         "warning_codes": [],
@@ -2223,7 +2223,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "通知渠道与路由",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/notifications.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/notifications.md",
             },
         ],
         "warning_codes": [],
@@ -2249,7 +2249,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "通知渠道与路由",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/notifications.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/notifications.md",
             },
         ],
         "warning_codes": [],
@@ -2278,7 +2278,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "通知渠道与路由",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/notifications.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/notifications.md",
             },
         ],
         "warning_codes": [],
@@ -2303,7 +2303,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "通知渠道与路由",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/notifications.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/notifications.md",
             },
         ],
         "warning_codes": ["reserved_flag"],
@@ -2330,7 +2330,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：其他配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#其他配置",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#其他配置",
             },
         ],
         "warning_codes": ["local_timezone"],
@@ -2356,7 +2356,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：环境变量完整列表",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": ["network_scope"],
@@ -2382,7 +2382,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：环境变量完整列表",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": ["restart_required"],
@@ -2408,11 +2408,11 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "云服务器访问 WebUI",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/deploy-webui-cloud.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/deploy-webui-cloud.md",
             },
             {
                 "label": "完整指南：WebUI 与 API",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#webui-与-api-服务",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#webui-与-api-服务",
             },
         ],
         "warning_codes": ["public_bind_requires_auth", "restart_required"],
@@ -2438,11 +2438,11 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "云服务器访问 WebUI",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/deploy-webui-cloud.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/deploy-webui-cloud.md",
             },
             {
                 "label": "完整指南：WebUI 与 API",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#webui-与-api-服务",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#webui-与-api-服务",
             },
         ],
         "warning_codes": ["port_mapping_required", "restart_required"],
@@ -2468,7 +2468,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：其他配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#其他配置",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#其他配置",
             },
         ],
         "warning_codes": ["restart_required"],
@@ -2495,7 +2495,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：其他配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#其他配置",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#其他配置",
             },
         ],
         "warning_codes": ["restart_required"],
@@ -2521,11 +2521,11 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：其他配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#其他配置",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#其他配置",
             },
             {
                 "label": "云服务器访问 WebUI",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/deploy-webui-cloud.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/deploy-webui-cloud.md",
             },
         ],
         "warning_codes": ["public_webui_requires_auth", "auth_settings_endpoint_required"],
@@ -2551,11 +2551,11 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：其他配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#其他配置",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#其他配置",
             },
             {
                 "label": "云服务器访问 WebUI",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/deploy-webui-cloud.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/deploy-webui-cloud.md",
             },
         ],
         "warning_codes": ["trusted_proxy_only"],
@@ -2581,7 +2581,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：其他配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#其他配置",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#其他配置",
             },
         ],
         "warning_codes": ["restart_required"],
@@ -2607,7 +2607,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：其他配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#其他配置",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#其他配置",
             },
         ],
         "warning_codes": ["force_run_override"],
@@ -2633,7 +2633,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：环境变量完整列表",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -2659,7 +2659,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：环境变量完整列表",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -2688,7 +2688,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：环境变量完整列表",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -2714,7 +2714,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：环境变量完整列表",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -2740,7 +2740,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：环境变量完整列表",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -2766,7 +2766,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：环境变量完整列表",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -2792,7 +2792,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：回测配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#回测功能",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#回测功能",
             },
         ],
         "warning_codes": [],
@@ -2819,7 +2819,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：回测配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#回测功能",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#回测功能",
             },
         ],
         "warning_codes": [],
@@ -2845,7 +2845,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：回测配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#回测功能",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#回测功能",
             },
         ],
         "warning_codes": [],
@@ -2870,7 +2870,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：回测配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#回测功能",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#回测功能",
             },
         ],
         "warning_codes": [],
@@ -2896,7 +2896,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：回测配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#回测功能",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#回测功能",
             },
         ],
         "warning_codes": [],
@@ -2922,7 +2922,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：Agent 配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -2948,7 +2948,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：Agent 配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -2975,7 +2975,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：Agent 配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -3001,7 +3001,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：Agent 配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -3027,7 +3027,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：Agent 配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -3056,7 +3056,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：Agent 配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -3087,7 +3087,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：Agent 配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -3113,7 +3113,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：Agent 配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -3139,7 +3139,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：Agent 配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -3165,7 +3165,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：Agent 配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -3191,7 +3191,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：Agent 配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -3217,7 +3217,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：Agent 配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -3243,7 +3243,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：Agent 配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -3272,7 +3272,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "完整指南：Agent 配置",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -3298,11 +3298,11 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "LLM 配置指南：问股可见对话上下文压缩",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md#问股可见对话上下文压缩",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md#问股可见对话上下文压缩",
             },
             {
                 "label": "完整指南：环境变量完整列表",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -3333,11 +3333,11 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "LLM 配置指南：问股可见对话上下文压缩",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md#问股可见对话上下文压缩",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md#问股可见对话上下文压缩",
             },
             {
                 "label": "完整指南：环境变量完整列表",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -3363,11 +3363,11 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "LLM 配置指南：问股可见对话上下文压缩",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md#问股可见对话上下文压缩",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md#问股可见对话上下文压缩",
             },
             {
                 "label": "完整指南：环境变量完整列表",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -3393,11 +3393,11 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "LLM 配置指南：问股可见对话上下文压缩",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md#问股可见对话上下文压缩",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md#问股可见对话上下文压缩",
             },
             {
                 "label": "完整指南：环境变量完整列表",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
             },
         ],
         "warning_codes": [],
@@ -3423,7 +3423,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "告警中心文档",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/alerts.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/alerts.md",
             },
         ],
         "warning_codes": [],
@@ -3449,7 +3449,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "告警中心文档",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/alerts.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/alerts.md",
             },
         ],
         "warning_codes": [],
@@ -3480,7 +3480,7 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "docs": [
             {
                 "label": "告警中心文档",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/alerts.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/alerts.md",
             },
         ],
         "warning_codes": ["legacy_json_only_basic_rules"],
@@ -3490,46 +3490,46 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
 _DOC_FULL_GUIDE_ENV = [
     {
         "label": "完整指南：环境变量完整列表",
-        "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
+        "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#环境变量完整列表",
     },
 ]
 
 _DOC_FULL_GUIDE_SEARCH = [
     {
         "label": "完整指南：搜索服务配置",
-        "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#搜索服务配置",
+        "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#搜索服务配置",
     },
 ]
 
 _DOC_FULL_GUIDE_DATA_SOURCE = [
     {
         "label": "完整指南：数据源配置",
-        "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#数据源配置",
+        "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#数据源配置",
     },
 ]
 
 _DOC_FULL_GUIDE_NOTIFICATION = [
     {
         "label": "完整指南：通知渠道配置",
-        "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#通知渠道详细配置",
+        "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#通知渠道详细配置",
     },
 ]
 
 _DOC_LLM_CONFIG = [
     {
         "label": "LLM 配置指南",
-        "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md",
+        "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/LLM_CONFIG_GUIDE.md",
     },
     {
         "label": "LLM 服务商配置速查",
-        "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/llm-providers.md",
+        "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/llm-providers.md",
     },
 ]
 
 _DOC_CUSTOM_WEBHOOK = [
     {
         "label": "完整指南：自定义 Webhook",
-        "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/full-guide.md#自定义-webhook",
+        "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/full-guide.md#自定义-webhook",
     },
 ]
 
@@ -3813,7 +3813,7 @@ _FIELD_HELP_METADATA: Dict[str, Dict[str, Any]] = {
             *_DOC_FULL_GUIDE_NOTIFICATION,
             {
                 "label": "飞书机器人配置专题",
-                "href": "https://github.com/ZhuLinsen/daily_stock_analysis/blob/main/docs/bot/feishu-bot-config.md",
+                "href": "https://github.com/stereon/equity_capital_analysis/blob/main/docs/bot/feishu-bot-config.md",
             },
         ],
         "warning_codes": ["secret_value"],

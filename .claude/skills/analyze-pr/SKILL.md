@@ -2,7 +2,7 @@
 
 分析 GitHub Pull Request，评估必要性、描述完整性、验证证据、主要风险与是否可直接合入。
 
-**Repository**: https://github.com/ZhuLinsen/daily_stock_analysis/pulls
+**Repository**: https://github.com/stereon/equity_capital_analysis/pulls
 
 ## Usage
 
@@ -17,10 +17,10 @@
 ### Step 1: 拉取 PR 基本信息
 
 ```bash
-gh pr view <pr_number> --repo ZhuLinsen/daily_stock_analysis
-gh pr view <pr_number> --repo ZhuLinsen/daily_stock_analysis --comments
-gh pr checks <pr_number> --repo ZhuLinsen/daily_stock_analysis
-gh pr diff <pr_number> --repo ZhuLinsen/daily_stock_analysis
+gh pr view <pr_number> --repo stereon/equity_capital_analysis
+gh pr view <pr_number> --repo stereon/equity_capital_analysis --comments
+gh pr checks <pr_number> --repo stereon/equity_capital_analysis
+gh pr diff <pr_number> --repo stereon/equity_capital_analysis
 ```
 
 如有失败的 CI，优先查看失败日志，而不是立刻在本地重跑全部检查：

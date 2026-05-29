@@ -106,7 +106,7 @@ docs/            模块行为、配置说明、专题文档
 
 ## License
 
-[MIT License](LICENSE)。本仓库基于 [ZhuLinsen/daily_stock_analysis](https://github.com/ZhuLinsen/daily_stock_analysis) 二次改造为个人使用工具，保留原作者贡献的版权声明。
+[MIT License](LICENSE)
 
 ## 免责声明
 

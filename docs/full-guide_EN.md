@@ -7,7 +7,7 @@ This document contains the complete configuration guide for the AI Stock Analysi
 ## Project Structure
 
 ```
-daily_stock_analysis/
+equity_capital_analysis/
 ├── main.py              # Main entry point
 ├── src/                 # Core business logic
 │   ├── analyzer.py      # AI analyzer
@@ -139,7 +139,7 @@ Go to your forked repo → `Settings` → `Secrets and variables` → `Actions` 
 |------------|------|:----:|
 | `STOCK_LIST` | Watchlist codes, e.g., `600519,300750,002594` | ✅ |
 | `ANSPIRE_API_KEYS` | [Anspire AI Search](https://aisearch.anspire.cn/) optimized for Chinese content; the same key can also be used for Anspire LLM fallback scenarios (example model: `Doubao-Seed-2.0-lite`) | Recommended |
-| `SERPAPI_API_KEYS` | [SerpAPI](https://serpapi.com/baidu-search-api?utm_source=github_daily_stock_analysis) search-engine results for realtime financial news | Recommended |
+| `SERPAPI_API_KEYS` | [SerpAPI](https://serpapi.com/baidu-search-api?utm_source=github_equity_capital_analysis) search-engine results for realtime financial news | Recommended |
 | `TAVILY_API_KEYS` | [Tavily](https://tavily.com/) Search API (for news search) | Optional |
 | `BOCHA_API_KEYS` | [Bocha Search](https://open.bocha.cn/) Web Search API (Chinese search optimized, supports AI summaries, multiple keys comma-separated) | Optional |
 | `BRAVE_API_KEYS` | [Brave Search](https://brave.com/search/api/) API (privacy-first, US-stock news enrichment, comma-separated for multiple keys) | Optional |
@@ -362,15 +362,15 @@ The Dockerfile builds the backend image. The runtime invokes `python main.py` to
 
 Official image registries:
 
-- GHCR: `ghcr.io/zhulinsen/daily_stock_analysis:<tag>`
-- Docker Hub: `<DOCKERHUB_USERNAME>/daily_stock_analysis:<tag>` (driven by the publisher's `DOCKERHUB_USERNAME` secret; the official release uses `zhulinsen/daily_stock_analysis`)
+- GHCR: `ghcr.io/stereon/equity_capital_analysis:<tag>`
+- Docker Hub: `<DOCKERHUB_USERNAME>/equity_capital_analysis:<tag>` (driven by the publisher's `DOCKERHUB_USERNAME` secret; the official release uses `stereon/equity_capital_analysis`)
 
 ### Quick Start
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/ZhuLinsen/daily_stock_analysis.git
-cd daily_stock_analysis
+git clone https://github.com/stereon/equity_capital_analysis.git
+cd equity_capital_analysis
 
 # 2. Configure environment variables
 cp .env.example .env
@@ -394,7 +394,7 @@ If you do not want to keep the source tree on the target machine, you can run th
 
 ```bash
 # Web/API mode
-docker pull zhulinsen/daily_stock_analysis:latest
+docker pull stereon/equity_capital_analysis:latest
 docker run -d \
   --name dsa-server \
   --env-file .env \
@@ -402,7 +402,7 @@ docker run -d \
   -v "$(pwd)/data:/app/data" \
   -v "$(pwd)/logs:/app/logs" \
   -v "$(pwd)/reports:/app/reports" \
-  zhulinsen/daily_stock_analysis:latest \
+  stereon/equity_capital_analysis:latest \
   python main.py --serve-only --host 0.0.0.0 --port 8000
 
 # Scheduled-task mode
@@ -412,7 +412,7 @@ docker run -d \
   -v "$(pwd)/data:/app/data" \
   -v "$(pwd)/logs:/app/logs" \
   -v "$(pwd)/reports:/app/reports" \
-  zhulinsen/daily_stock_analysis:latest
+  stereon/equity_capital_analysis:latest
 ```
 
 For pinned deployments or easier rollback, replace `latest` with a concrete version tag such as `v3.13.0`.
@@ -1235,4 +1235,4 @@ Technical indicator rules use daily-close edge triggers only. Partial-bar handli
 
 ---
 
-For more questions, please [submit an Issue](https://github.com/ZhuLinsen/daily_stock_analysis/issues)
+For more questions, please [submit an Issue](https://github.com/stereon/equity_capital_analysis/issues)

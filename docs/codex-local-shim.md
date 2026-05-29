@@ -13,7 +13,7 @@
 ## 启动 Shim
 
 ```bash
-cd /path/to/daily_stock_analysis
+cd /path/to/equity_capital_analysis
 python scripts/codex_openai_shim.py --host 127.0.0.1 --port 8765
 ```
 

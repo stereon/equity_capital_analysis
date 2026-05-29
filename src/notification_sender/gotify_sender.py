@@ -80,7 +80,7 @@ class GotifySender:
 
         headers = {
             "Content-Type": "application/json; charset=utf-8",
-            "User-Agent": "daily_stock_analysis",
+            "User-Agent": "equity_capital_analysis",
             "X-Gotify-Key": str(self._gotify_token).strip(),
         }
         payload = {
