@@ -66,12 +66,14 @@ export default function Portfolio() {
     queryKey: ['portfolio-snapshot', accountId],
     queryFn: () =>
       api.portfolioSnapshot(accountId === ALL ? {} : { account_id: accountId }),
+    refetchInterval: 60_000, // 浮盈浮亏每分钟刷一次
   });
 
   const riskQ = useQuery({
     queryKey: ['portfolio-risk', accountId],
     queryFn: () => api.portfolioRisk(accountId === ALL ? {} : { account_id: accountId }),
     enabled: snapshotQ.isSuccess,
+    refetchInterval: 60_000,
   });
 
   const tradesQ = useQuery({

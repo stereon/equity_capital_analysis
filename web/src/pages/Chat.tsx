@@ -4,7 +4,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeRaw from 'rehype-raw';
-import { Send, Loader2, Plus, Trash2, Wrench, MessageSquare, Bot, User as UserIcon, Pencil } from 'lucide-react';
+import { Send, Loader2, Plus, Trash2, Wrench, MessageSquare, Bot, User as UserIcon, Pencil, Bookmark } from 'lucide-react';
+import { formatPercent, formatPrice, changeColor } from '@/lib/utils';
 import { toast } from 'sonner';
 import { api, type ChatSessionSummary, type ChatStreamEvent } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -31,6 +32,7 @@ function saveAliases(map: Record<string, string>) {
     /* quota 满或不可写,忽略 */
   }
 }
+
 
 interface ToolEvent {
   tool: string;
@@ -80,6 +82,48 @@ export default function Chat() {
     refetchOnWindowFocus: false,
   });
   const sessions = sessionsQ.data?.sessions || [];
+
+  // 自选股(从 system config 的 stock_list 解析,逗号或换行分隔)
+  const configQ = useQuery({
+    queryKey: ['system-config-watchlist'],
+    queryFn: () => api.systemConfig(),
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  });
+  const watchlist: string[] = useMemo(() => {
+    const item = configQ.data?.items?.find((it) => it.key.toLowerCase() === 'stock_list');
+    const raw = item?.value || '';
+    return raw
+      .split(/[,，\s\n]+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 20);
+  }, [configQ.data]);
+
+  // 自选股实时报价(并发拉取,失败不影响其他;每分钟自动刷新)
+  const quotesQ = useQuery({
+    queryKey: ['watchlist-quotes', watchlist.join(',')],
+    enabled: watchlist.length > 0,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    refetchInterval: 60_000,
+    queryFn: async () => {
+      const results = await Promise.all(
+        watchlist.map((code) =>
+          api
+            .stockQuote(code)
+            .then((q) => ({ code, ok: true as const, quote: q }))
+            .catch(() => ({ code, ok: false as const })),
+        ),
+      );
+      return results;
+    },
+  });
+
+  const insertPrompt = (text: string) => {
+    if (sending) return;
+    setInput((prev) => (prev ? `${prev.replace(/\s+$/, '')} ${text}` : text));
+  };
 
   // 切换会话:拉历史消息
   useEffect(() => {
@@ -308,7 +352,65 @@ export default function Chat() {
           )}
         </div>
       </section>
+
+      {/* 右侧:自选股实时报价(点击追加分析提示到输入框) */}
+      <aside className="bg-card text-card-foreground hidden w-64 shrink-0 flex-col gap-2 rounded-md border p-3 lg:flex">
+        <div className="flex items-center justify-between">
+          <h3 className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+            <Bookmark className="size-3.5" />
+            自选股
+          </h3>
+          {quotesQ.isFetching && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
+        </div>
+        {watchlist.length === 0 ? (
+          <p className="text-muted-foreground text-xs">
+            未配置自选股。在「设置」里填 STOCK_LIST 即可在这里看到实时报价。
+          </p>
+        ) : (
+          <div className="flex flex-1 flex-col gap-1 overflow-y-auto">
+            {watchlist.map((code) => {
+              const item = quotesQ.data?.find((d) => d.code === code);
+              const q = item && item.ok ? item.quote : null;
+              return <WatchlistRow key={code} code={code} q={q} disabled={sending} onClick={() => insertPrompt(`帮我分析一下 ${code}`)} />;
+            })}
+          </div>
+        )}
+        <p className="text-muted-foreground mt-auto text-[11px] leading-relaxed">
+          每分钟自动刷新。点击代码可追加「分析 xxx」到输入框。
+        </p>
+      </aside>
     </div>
+  );
+}
+
+function WatchlistRow({
+  code,
+  q,
+  disabled,
+  onClick,
+}: {
+  code: string;
+  q: { stock_name?: string | null; current_price: number; change_percent?: number | null } | null;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="group flex items-center justify-between rounded-md border border-transparent px-2 py-1.5 text-left transition-colors hover:border-border hover:bg-muted disabled:opacity-50"
+    >
+      <div className="flex min-w-0 flex-col">
+        <span className="font-mono text-xs">{code}</span>
+        <span className="truncate text-[11px] text-muted-foreground">{q?.stock_name || '—'}</span>
+      </div>
+      <div className="flex flex-col items-end">
+        <span className="text-xs tabular-nums">{q ? formatPrice(q.current_price) : '—'}</span>
+        <span className={`text-[11px] tabular-nums ${changeColor(q?.change_percent)}`}>
+          {q ? formatPercent(q.change_percent) : '—'}
+        </span>
+      </div>
+    </button>
   );
 }
 

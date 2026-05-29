@@ -876,32 +876,80 @@ class HistoryService:
                     report_lines.append(f"- {item}")
                 report_lines.append("")
 
-        # ========== 如果没有 dashboard，显示传统格式 ==========
+        # ========== 技术面 / 基本面 / 行业 / 宏观(无论是否有 dashboard 都渲染) ==========
+        tech_overall_heading = "Technical Analysis" if report_language == "en" else "技术面综合"
+        fundamental_heading = "Fundamentals" if report_language == "en" else "基本面"
+        company_heading = "Company Highlights" if report_language == "en" else "公司亮点 / 风险"
+        sector_heading = "Sector & Industry" if report_language == "en" else "行业与板块"
+        macro_heading = "Macro & Market Sentiment" if report_language == "en" else "宏观与市场情绪"
+        hot_topics_heading = "Hot Topics" if report_language == "en" else "热点题材"
+
+        if result.technical_analysis or result.ma_analysis or result.volume_analysis or result.pattern_analysis:
+            report_lines.extend([
+                f"### 📊 {tech_overall_heading}",
+                "",
+            ])
+            if result.technical_analysis:
+                report_lines.append(result.technical_analysis)
+                report_lines.append("")
+            if result.ma_analysis:
+                report_lines.append(f"**{ma_label}**: {result.ma_analysis}")
+            if result.volume_analysis:
+                report_lines.append(f"**{volume_analysis_label}**: {result.volume_analysis}")
+            if result.pattern_analysis:
+                pattern_label = "Pattern" if report_language == "en" else "形态"
+                report_lines.append(f"**{pattern_label}**: {result.pattern_analysis}")
+            report_lines.append("")
+
+        if result.fundamental_analysis:
+            report_lines.extend([
+                f"### 🏛️ {fundamental_heading}",
+                "",
+                result.fundamental_analysis,
+                "",
+            ])
+        if result.company_highlights:
+            report_lines.extend([
+                f"### 🏢 {company_heading}",
+                "",
+                result.company_highlights,
+                "",
+            ])
+        if result.sector_position:
+            report_lines.extend([
+                f"### 📦 {sector_heading}",
+                "",
+                result.sector_position,
+                "",
+            ])
+        if result.market_sentiment:
+            report_lines.extend([
+                f"### 🌐 {macro_heading}",
+                "",
+                result.market_sentiment,
+                "",
+            ])
+        if result.hot_topics:
+            report_lines.extend([
+                f"### 🔥 {hot_topics_heading}",
+                "",
+                result.hot_topics,
+                "",
+            ])
+
+        # ========== 如果没有 dashboard,补足传统格式里 dashboard 缺失的部分 ==========
+        # (技术面已经在上面统一渲染,这里只补操作理由 / 风险提示 / 消息面)
         if not dashboard:
-            # 操作理由
             if result.buy_reason:
                 report_lines.extend([
                     f"**💡 {reason_label}**: {result.buy_reason}",
                     "",
                 ])
-            # 风险提示
             if result.risk_warning:
                 report_lines.extend([
                     f"**⚠️ {risk_warning_label}**: {result.risk_warning}",
                     "",
                 ])
-            # 技术面分析
-            if result.ma_analysis or result.volume_analysis:
-                report_lines.extend([
-                    f"### 📊 {technical_heading}",
-                    "",
-                ])
-                if result.ma_analysis:
-                    report_lines.append(f"**{ma_label}**: {result.ma_analysis}")
-                if result.volume_analysis:
-                    report_lines.append(f"**{volume_analysis_label}**: {result.volume_analysis}")
-                report_lines.append("")
-            # 消息面
             if result.news_summary:
                 report_lines.extend([
                     f"### 📰 {news_heading}",

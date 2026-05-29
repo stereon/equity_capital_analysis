@@ -51,7 +51,7 @@ export default function Layout() {
 
       {/* 主内容 */}
       <main className="flex-1 overflow-x-hidden">
-        <div className="mx-auto max-w-6xl px-8 py-8">
+        <div className="mx-auto max-w-screen-2xl px-8 py-8">
           <Outlet />
         </div>
       </main>

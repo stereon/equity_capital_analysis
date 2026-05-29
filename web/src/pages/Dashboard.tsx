@@ -43,7 +43,7 @@ export default function Dashboard() {
   const q = useQuery({
     queryKey: ['dashboard', region],
     queryFn: () => api.dashboard(region),
-    refetchInterval: 60_000,
+    refetchInterval: 30_000,
   });
 
   const mrMutation = useMutation({
