@@ -2093,6 +2093,320 @@ class SearXNGSearchProvider(BaseSearchProvider):
         )
 
 
+class CninfoSearchProvider(BaseSearchProvider):
+    """巨潮资讯网公告搜索（A 股，权威源）。
+
+    特点：
+    - 官方监管平台，无需 API Key
+    - 仅对 A 股股票生效（query 中识别到 6 位股票代码后才触发）
+    - 直接 POST 巨潮 hisAnnouncement 接口，避免依赖 akshare 上游 schema 突变
+    - 返回的全部结果都是目标股票公告，相关性直接命中
+
+    适合在没有商业搜索 API Key 时作为新闻 / 公告兜底来源。
+    """
+
+    # A 股代码以 0 / 3 / 6 / 8 / 9 开头（深圳主板 / 创业板 / 上海主板 / 北交所 / 科创板范围）
+    _STOCK_CODE_PATTERN = re.compile(r"(?<!\d)([036][0-9]{5}|[89][0-9]{5})(?!\d)")
+    _CNINFO_QUERY_URL = "http://www.cninfo.com.cn/new/hisAnnouncement/query"
+    _CNINFO_DETAIL_URL = "http://www.cninfo.com.cn/new/disclosure/detail"
+    _REQUEST_TIMEOUT_SECONDS = 8
+
+    def __init__(self) -> None:
+        # 不需要 API Key，但保留父类初始化以复用日志 / 锁机制
+        super().__init__(api_keys=[], name="Cninfo")
+
+    @property
+    def is_available(self) -> bool:
+        # cninfo 公开接口无需 key，始终可用；具体能否拉到数据交给 _do_search 判断
+        return True
+
+    def search(self, query: str, max_results: int = 5, days: int = 7) -> SearchResponse:
+        """绕过父类的 API Key 校验，直接调用 _do_search。"""
+        start_time = time.time()
+        try:
+            response = self._do_search(query, "", max_results, days=days)
+            response.search_time = time.time() - start_time
+            return response
+        except Exception as exc:
+            elapsed = time.time() - start_time
+            logger.error(f"[{self.name}] 搜索 '{query}' 失败: {exc}")
+            return SearchResponse(
+                query=query,
+                results=[],
+                provider=self.name,
+                success=False,
+                error_message=str(exc),
+                search_time=elapsed,
+            )
+
+    @staticmethod
+    def _extract_stock_code(query: str) -> Optional[str]:
+        match = CninfoSearchProvider._STOCK_CODE_PATTERN.search(query or "")
+        return match.group(1) if match else None
+
+    @staticmethod
+    def _build_cninfo_stock_param(stock_code: str) -> str:
+        """构造 cninfo `stock` 参数: '600519,gssh0600519' (sh) / '000001,gssz0000001' (sz)。"""
+        # 6/8/9 起头视为上交所；其余（0/3）走深交所
+        if stock_code[:1] in ("6", "8", "9"):
+            org_id = f"gssh0{stock_code}"
+        else:
+            org_id = f"gssz0{stock_code}"
+        return f"{stock_code},{org_id}"
+
+    @classmethod
+    def _build_announcement_url(cls, item: Dict[str, Any], stock_code: str) -> str:
+        """优先 adjunctUrl 直链 PDF，否则按 announcementId / orgId 拼 detail 页。"""
+        adjunct = item.get("adjunctUrl") or ""
+        if adjunct:
+            adjunct = adjunct.lstrip("/")
+            return f"http://static.cninfo.com.cn/{adjunct}"
+        ann_id = item.get("announcementId") or ""
+        org_id = item.get("orgId") or cls._build_cninfo_stock_param(stock_code).split(",")[1]
+        return f"{cls._CNINFO_DETAIL_URL}?stockCode={stock_code}&announcementId={ann_id}&orgId={org_id}"
+
+    def _do_search(
+        self,
+        query: str,
+        api_key: str,  # 未使用，保留以兼容父类签名
+        max_results: int,
+        days: int = 7,
+    ) -> SearchResponse:
+        stock_code = self._extract_stock_code(query)
+        if not stock_code:
+            # 没有股票代码：cninfo 公告 by-code，无法处理，返回空（不算失败）
+            return SearchResponse(
+                query=query,
+                results=[],
+                provider=self.name,
+                success=True,
+            )
+
+        end_dt = datetime.now()
+        start_dt = end_dt - timedelta(days=max(1, days))
+        column = "sse" if stock_code[:1] in ("6", "8", "9") else "szse"
+        payload = {
+            "pageNum": "1",
+            "pageSize": str(max(max_results, 5)),
+            "column": column,
+            "tabName": "fulltext",
+            "stock": self._build_cninfo_stock_param(stock_code),
+            "seDate": f"{start_dt.strftime('%Y-%m-%d')}~{end_dt.strftime('%Y-%m-%d')}",
+        }
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Referer": (
+                "http://www.cninfo.com.cn/new/commonUrl/pageOfSearch"
+                "?url=disclosure/list/search"
+            ),
+            "Content-Type": "application/x-www-form-urlencoded",
+        }
+
+        try:
+            resp = requests.post(
+                self._CNINFO_QUERY_URL,
+                data=payload,
+                headers=headers,
+                timeout=self._REQUEST_TIMEOUT_SECONDS,
+            )
+            resp.raise_for_status()
+            payload_json = resp.json()
+        except Exception as exc:
+            return SearchResponse(
+                query=query,
+                results=[],
+                provider=self.name,
+                success=False,
+                error_message=f"cninfo 查询失败: {exc}",
+            )
+
+        announcements = payload_json.get("announcements") or []
+        if not announcements:
+            return SearchResponse(
+                query=query,
+                results=[],
+                provider=self.name,
+                success=True,
+            )
+
+        results: List[SearchResult] = []
+        for item in announcements[:max_results]:
+            title = str(item.get("announcementTitle") or "").strip()
+            if not title:
+                continue
+            name = str(item.get("secName") or "").strip()
+            time_ms = item.get("announcementTime")
+            published = None
+            if isinstance(time_ms, (int, float)) and time_ms > 0:
+                try:
+                    published = datetime.fromtimestamp(int(time_ms) / 1000).strftime("%Y-%m-%d")
+                except Exception:
+                    published = None
+            results.append(
+                SearchResult(
+                    title=title,
+                    snippet=f"{name} 公告 / {stock_code}" if name else f"公告 / {stock_code}",
+                    url=self._build_announcement_url(item, stock_code),
+                    source="巨潮资讯",
+                    published_date=published,
+                )
+            )
+
+        return SearchResponse(
+            query=query,
+            results=results,
+            provider=self.name,
+            success=True,
+        )
+
+
+class EastmoneyStockNewsProvider(BaseSearchProvider):
+    """东方财富个股新闻 (akshare stock_news_em wrap).
+
+    特点：
+    - 走 search-api-web.eastmoney.com（不是被阻断的 push2），免 API Key
+    - 仅对 A 股股票生效（query 提取 6 位代码后触发）
+    - 直接返回与目标股票相关的新闻，relevance 高
+    - 与 CninfoSearchProvider 互补：cninfo 是法定公告，em 是市场新闻 / 资讯
+
+    用作没有商业搜索 API Key 时的新闻面兜底（替代财联社快讯的失效路径）。
+    """
+
+    _STOCK_CODE_PATTERN = re.compile(r"(?<!\d)([036][0-9]{5}|[89][0-9]{5})(?!\d)")
+
+    def __init__(self) -> None:
+        super().__init__(api_keys=[], name="EastmoneyStockNews")
+
+    @property
+    def is_available(self) -> bool:
+        return True
+
+    def search(self, query: str, max_results: int = 5, days: int = 7) -> SearchResponse:
+        """绕过父类 API Key 校验，直接走 _do_search。"""
+        start_time = time.time()
+        try:
+            response = self._do_search(query, "", max_results, days=days)
+            response.search_time = time.time() - start_time
+            return response
+        except Exception as exc:
+            elapsed = time.time() - start_time
+            logger.error(f"[{self.name}] 搜索 '{query}' 失败: {exc}")
+            return SearchResponse(
+                query=query,
+                results=[],
+                provider=self.name,
+                success=False,
+                error_message=str(exc),
+                search_time=elapsed,
+            )
+
+    @staticmethod
+    def _extract_stock_code(query: str) -> Optional[str]:
+        match = EastmoneyStockNewsProvider._STOCK_CODE_PATTERN.search(query or "")
+        return match.group(1) if match else None
+
+    @staticmethod
+    def _parse_news_datetime(time_str: str) -> Optional[datetime]:
+        """容忍多种发布时间格式；解析失败返回 None。"""
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+            try:
+                return datetime.strptime(time_str, fmt)
+            except ValueError:
+                continue
+        return None
+
+    def _do_search(
+        self,
+        query: str,
+        api_key: str,  # 未使用
+        max_results: int,
+        days: int = 7,
+    ) -> SearchResponse:
+        stock_code = self._extract_stock_code(query)
+        if not stock_code:
+            return SearchResponse(
+                query=query,
+                results=[],
+                provider=self.name,
+                success=True,
+            )
+
+        try:
+            import akshare as ak
+        except Exception as exc:
+            return SearchResponse(
+                query=query,
+                results=[],
+                provider=self.name,
+                success=False,
+                error_message=f"akshare 未安装: {exc}",
+            )
+
+        try:
+            df = ak.stock_news_em(symbol=stock_code)
+        except Exception as exc:
+            return SearchResponse(
+                query=query,
+                results=[],
+                provider=self.name,
+                success=False,
+                error_message=f"东方财富个股新闻查询失败: {exc}",
+            )
+
+        if df is None or df.empty:
+            return SearchResponse(
+                query=query,
+                results=[],
+                provider=self.name,
+                success=True,
+            )
+
+        # 按日对齐窗口：days=3 含义为 today + 前 3 天 (含 3 天前的整天)
+        # 比如 06-01 days=3 → start=05-29，5-29 的 16:00 新闻能进窗口
+        today = datetime.now().date()
+        start_date = today - timedelta(days=max(1, days))
+
+        results: List[SearchResult] = []
+        for _, row in df.iterrows():
+            title = str(row.get("新闻标题", "")).strip()
+            if not title:
+                continue
+
+            published = None
+            time_str = str(row.get("发布时间", "")).strip()
+            if time_str:
+                pub_dt = self._parse_news_datetime(time_str)
+                if pub_dt is not None:
+                    if pub_dt.date() < start_date:
+                        continue  # 超出窗口直接跳过
+                    published = pub_dt.strftime("%Y-%m-%d")
+
+            content = str(row.get("新闻内容", "")).strip()
+            source = str(row.get("文章来源", "")).strip() or "东方财富"
+            url = str(row.get("新闻链接", "")).strip()
+            results.append(
+                SearchResult(
+                    title=title,
+                    snippet=content[:300] if content else f"东方财富个股新闻 / {stock_code}",
+                    url=url,
+                    source=source,
+                    published_date=published,
+                )
+            )
+            if len(results) >= max_results:
+                break
+
+        return SearchResponse(
+            query=query,
+            results=results,
+            provider=self.name,
+            success=True,
+        )
+
+
 class SearchService:
     """
     搜索服务
@@ -2249,7 +2563,23 @@ class SearchService:
         if anspire_keys:
             self._providers.insert(0, AnspireSearchProvider(anspire_keys))
             logger.info(f"已配置 Anspire Search 搜索，共 {len(anspire_keys)} 个 API Key")
-            
+
+        # 8. 巨潮资讯公告（A 股，监管平台，无需 API Key）
+        #    默认关闭；需要在 .env 设 CNINFO_DISCLOSURE_ENABLED=true 显式启用。
+        #    避免在没有 Tavily 等付费源的环境里默认改变现有 provider 排序行为。
+        import os as _os
+        cninfo_flag = _os.getenv("CNINFO_DISCLOSURE_ENABLED", "").strip().lower()
+        if cninfo_flag in ("1", "true", "yes", "on"):
+            self._providers.append(CninfoSearchProvider())
+            logger.info("已启用巨潮资讯公告搜索 (CNINFO_DISCLOSURE_ENABLED, A 股自动触发)")
+
+        # 9. 东方财富个股新闻（A 股快讯 / 资讯，无需 API Key）
+        #    默认关闭；需要在 .env 设 EM_STOCK_NEWS_ENABLED=true 显式启用。
+        em_news_flag = _os.getenv("EM_STOCK_NEWS_ENABLED", "").strip().lower()
+        if em_news_flag in ("1", "true", "yes", "on"):
+            self._providers.append(EastmoneyStockNewsProvider())
+            logger.info("已启用东方财富个股新闻搜索 (EM_STOCK_NEWS_ENABLED, A 股自动触发)")
+
         if not self._providers:
             logger.warning("未配置任何搜索能力，新闻搜索功能将不可用")
 
