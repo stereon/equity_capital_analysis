@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import { Play, Loader2, CheckCircle2, AlertCircle, Clock, Sparkles, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { api, type AgentSkill } from '@/lib/api';
+import { api, ApiError, type AgentSkill } from '@/lib/api';
 
 const LAST_ANALYZE_TASK_KEY = ['analyze-last-task'] as const;
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -101,7 +101,17 @@ export default function Analyze() {
         if (s.status === 'completed') toast.success('分析完成,可去「历史」查看');
         if (s.status === 'failed') toast.error(`分析失败: ${s.error || '未知错误'}`);
       } catch (err) {
-        // 静默,下一次再试
+        // 后端重启 / GC 后内存里的 task 字典会清空,持续 404 时清掉本地 stale
+        // 任务,解锁「开始分析」按钮,让用户能重新触发
+        if (err instanceof ApiError && err.status === 404) {
+          if (pollingRef.current) {
+            window.clearInterval(pollingRef.current);
+            pollingRef.current = null;
+          }
+          setTask(null);
+          toast.error('上次任务已丢失（多半因后端重启），请重新触发分析');
+        }
+        // 其他错误静默,下一次再试
       }
     }, 3000);
     return () => {
@@ -230,16 +240,17 @@ export default function Analyze() {
             <CardDescription className="font-mono text-xs">{task.taskId}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
+            {/* 后端 progress 已是 0-100 整数（不是 0-1 比例），不应再 *100 */}
             {task.progress !== undefined && (
               <div className="space-y-1">
                 <div className="flex justify-between text-xs text-muted-foreground">
                   <span>进度</span>
-                  <span>{Math.round((task.progress || 0) * 100)}%</span>
+                  <span>{Math.round(task.progress || 0)}%</span>
                 </div>
                 <div className="h-2 overflow-hidden rounded-full bg-muted">
                   <div
                     className="bg-primary h-full transition-all"
-                    style={{ width: `${(task.progress || 0) * 100}%` }}
+                    style={{ width: `${Math.min(100, Math.max(0, task.progress || 0))}%` }}
                   />
                 </div>
               </div>

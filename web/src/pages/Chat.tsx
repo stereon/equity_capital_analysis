@@ -15,6 +15,8 @@ type Role = 'user' | 'assistant';
 
 // 会话别名持久化在 localStorage,后端 schema 暂未支持 title
 const ALIAS_STORAGE_KEY = 'chat-session-aliases';
+// 当前选中的 session id 持久化:用户切到其他页面再回来时自动恢复会话
+const ACTIVE_SESSION_KEY = 'chat-active-session-id';
 
 function loadAliases(): Record<string, string> {
   try {
@@ -31,6 +33,30 @@ function saveAliases(map: Record<string, string>) {
   } catch {
     /* quota 满或不可写,忽略 */
   }
+}
+
+function loadActiveSessionId(): string | null {
+  try {
+    return localStorage.getItem(ACTIVE_SESSION_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function saveActiveSessionId(sid: string | null) {
+  try {
+    if (sid) localStorage.setItem(ACTIVE_SESSION_KEY, sid);
+    else localStorage.removeItem(ACTIVE_SESSION_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+function isRecent(iso: string | null | undefined, withinMs: number): boolean {
+  if (!iso) return false;
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return false;
+  return Date.now() - t < withinMs;
 }
 
 
@@ -52,13 +78,22 @@ interface UiMessage {
 
 export default function Chat() {
   const queryClient = useQueryClient();
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  // 初始 sessionId 从 localStorage 恢复;让用户切到其他页面再回来时仍处于上次会话
+  const [sessionId, setSessionId] = useState<string | null>(() => loadActiveSessionId());
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [sending, setSending] = useState(false);
   const [aliases, setAliases] = useState<Record<string, string>>(() => loadAliases());
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  // streaming 中:跳过从后端 reload 历史消息的副作用,避免本地正在追加的
+  // AI 回复被刚拉到的 stale snapshot 覆盖
+  const streamingRef = useRef<boolean>(false);
+
+  // sessionId 变化时同步到 localStorage
+  useEffect(() => {
+    saveActiveSessionId(sessionId);
+  }, [sessionId]);
 
   const handleRename = (sid: string) => {
     const current = aliases[sid] || '';
@@ -131,19 +166,36 @@ export default function Chat() {
       setMessages([]);
       return;
     }
+    // streaming 时 sessionId 是被 stream 早期事件 setSessionId 设置的,本地
+    // messages 正在被 SSE 逐步追加,不应该再去后端拉 snapshot 覆盖它
+    if (streamingRef.current) {
+      return;
+    }
     let cancelled = false;
     (async () => {
       try {
         const r = await api.chatSessionMessages(sessionId, 200);
         if (cancelled) return;
         // 后端返回的 messages 形态较松,这里只挑 user/assistant 用于显示
-        const mapped: UiMessage[] = (r.messages || [])
-          .filter((m) => m.role === 'user' || m.role === 'assistant')
-          .map((m, i) => ({
-            id: `${sessionId}-${i}`,
-            role: m.role as Role,
-            content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? ''),
-          }));
+        const filtered = (r.messages || []).filter(
+          (m) => m.role === 'user' || m.role === 'assistant',
+        );
+        const mapped: UiMessage[] = filtered.map((m, i) => ({
+          id: `${sessionId}-${i}`,
+          role: m.role as Role,
+          content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content ?? ''),
+        }));
+        // 最后一条是 user 且发送时间在 10 分钟内 -> 视为生成中,补一个
+        // 「思考中」占位,让用户知道后台还在跑(切走再回来不至于以为消失了)
+        const last = filtered[filtered.length - 1];
+        if (last && last.role === 'user' && isRecent(last.created_at, 10 * 60_000)) {
+          mapped.push({
+            id: `${sessionId}-thinking`,
+            role: 'assistant',
+            content: '思考中…（后台仍在生成，可稍后切回来查看）',
+            streaming: true,
+          });
+        }
         setMessages(mapped);
       } catch (e) {
         toast.error(`加载会话失败: ${(e as Error).message}`);
@@ -212,6 +264,7 @@ export default function Chat() {
     if (!text || sending) return;
     setInput('');
     setSending(true);
+    streamingRef.current = true;
 
     const userMsg: UiMessage = { id: `u-${Date.now()}`, role: 'user', content: text };
     const aiMsgId = `a-${Date.now()}`;
@@ -228,7 +281,12 @@ export default function Chat() {
       await api.chatStream(
         { message: text, session_id: sessionId || undefined },
         (e: ChatStreamEvent) => {
-          if (e.type === 'thinking') {
+          if (e.type === 'session') {
+            // 后端最早事件:立即持久化 sessionId,让切走再回来能找回会话
+            if (e.session_id && e.session_id !== sessionId) {
+              setSessionId(e.session_id);
+            }
+          } else if (e.type === 'thinking') {
             updateAi((m) => ({ ...m, content: m.content || '思考中…' }));
           } else if (e.type === 'tool_start') {
             updateAi((m) => ({
@@ -267,6 +325,7 @@ export default function Chat() {
       }
     } finally {
       setSending(false);
+      streamingRef.current = false;
       abortRef.current = null;
     }
   };

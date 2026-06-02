@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Sparkles, Loader2, Flame, Hash, FileText, History as HistoryIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, type RecommendCandidate, type RecommendTaskStatus } from '@/lib/api';
+import { api, ApiError, type RecommendCandidate, type RecommendTaskStatus } from '@/lib/api';
 
 const LAST_TASK_KEY = ['recommend-last-task'] as const;
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -76,8 +76,15 @@ export default function Recommend() {
           stopPolling();
           toast.error(`推荐失败: ${s.error || '未知错误'}`);
         }
-      } catch {
-        /* 单次失败忽略,下次再试 */
+      } catch (err) {
+        // 后端重启 / GC 后内存里的 task 会消失;持续 404 时停止轮询并提示重跑
+        if (err instanceof ApiError && err.status === 404) {
+          stopPolling();
+          setTask(null);
+          toast.error('任务已丢失（可能因后端重启），请重新触发推荐');
+          return;
+        }
+        /* 单次网络抖动忽略,下次再试 */
       }
     }, 2000);
     return () => stopPolling();

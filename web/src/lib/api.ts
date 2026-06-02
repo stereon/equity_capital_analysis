@@ -772,6 +772,7 @@ export interface ChatMessage {
 }
 
 export type ChatStreamEvent =
+  | { type: 'session'; session_id: string }
   | { type: 'thinking'; message?: string }
   | { type: 'tool_start'; tool: string; display_name?: string; args?: Record<string, unknown> }
   | { type: 'tool_done'; tool: string; display_name?: string; success?: boolean; duration_ms?: number }

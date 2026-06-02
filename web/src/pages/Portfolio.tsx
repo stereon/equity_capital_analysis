@@ -12,6 +12,7 @@ import {
   Loader2,
   Trash2,
   Upload,
+  RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import {
@@ -41,9 +42,39 @@ import { cn, formatPercent, formatPrice, changeColor } from '@/lib/utils';
 const ALL = -1; // 表示「全部账户」
 type FormKind = 'account' | 'trade' | 'csv' | null;
 
+// 刷新间隔候选(毫秒);0 表示不自动刷新
+const REFRESH_OPTIONS: { label: string; value: number }[] = [
+  { label: '30s', value: 30_000 },
+  { label: '1min', value: 60_000 },
+  { label: '3min', value: 180_000 },
+  { label: '5min', value: 300_000 },
+  { label: '手动', value: 0 },
+];
+const REFRESH_STORAGE_KEY = 'portfolio-refresh-interval-ms';
+
+function loadRefreshInterval(): number {
+  try {
+    const raw = localStorage.getItem(REFRESH_STORAGE_KEY);
+    if (!raw) return 60_000;
+    const n = Number(raw);
+    return REFRESH_OPTIONS.some((o) => o.value === n) ? n : 60_000;
+  } catch {
+    return 60_000;
+  }
+}
+
+function saveRefreshInterval(ms: number): void {
+  try {
+    localStorage.setItem(REFRESH_STORAGE_KEY, String(ms));
+  } catch {
+    /* ignore */
+  }
+}
+
 export default function Portfolio() {
   const [accountId, setAccountId] = useState<number>(ALL);
   const [openForm, setOpenForm] = useState<FormKind>(null);
+  const [refreshMs, setRefreshMs] = useState<number>(() => loadRefreshInterval());
   const qc = useQueryClient();
 
   const accountsQ = useQuery({
@@ -66,14 +97,15 @@ export default function Portfolio() {
     queryKey: ['portfolio-snapshot', accountId],
     queryFn: () =>
       api.portfolioSnapshot(accountId === ALL ? {} : { account_id: accountId }),
-    refetchInterval: 60_000, // 浮盈浮亏每分钟刷一次
+    // 0 = 不自动刷新;否则按用户在页面顶部选的间隔刷
+    refetchInterval: refreshMs > 0 ? refreshMs : false,
   });
 
   const riskQ = useQuery({
     queryKey: ['portfolio-risk', accountId],
     queryFn: () => api.portfolioRisk(accountId === ALL ? {} : { account_id: accountId }),
     enabled: snapshotQ.isSuccess,
-    refetchInterval: 60_000,
+    refetchInterval: refreshMs > 0 ? refreshMs : false,
   });
 
   const tradesQ = useQuery({
@@ -105,12 +137,26 @@ export default function Portfolio() {
             账户、持仓、风险与近期交易。数据来自 `/api/v1/portfolio/*`。
           </p>
         </div>
-        <AccountSelector
-          accounts={accounts}
-          loading={accountsQ.isLoading}
-          value={accountId}
-          onChange={setAccountId}
-        />
+        <div className="flex flex-wrap items-end gap-3">
+          <RefreshIntervalSelector
+            value={refreshMs}
+            onChange={(ms) => {
+              setRefreshMs(ms);
+              saveRefreshInterval(ms);
+            }}
+            onManualRefresh={() => {
+              qc.invalidateQueries({ queryKey: ['portfolio-snapshot'] });
+              qc.invalidateQueries({ queryKey: ['portfolio-risk'] });
+            }}
+            isFetching={snapshotQ.isFetching}
+          />
+          <AccountSelector
+            accounts={accounts}
+            loading={accountsQ.isLoading}
+            value={accountId}
+            onChange={setAccountId}
+          />
+        </div>
       </header>
 
       {/* 操作工具栏 */}
@@ -262,36 +308,7 @@ export default function Portfolio() {
         </CardContent>
       </Card>
 
-      {/* 风险摘要 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <AlertTriangle className="size-4" />
-            风险摘要
-          </CardTitle>
-          <CardDescription>个股/行业集中度、回撤与止损监测</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {riskQ.isLoading ? (
-            <div className="space-y-2">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <Skeleton key={i} className="h-6" />
-              ))}
-            </div>
-          ) : riskQ.isError ? (
-            <ErrorBox msg={(riskQ.error as Error)?.message} />
-          ) : !risk ? (
-            <EmptyBox icon={AlertTriangle} text="暂无风险数据" />
-          ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <RiskSection title="个股集中度" data={risk.concentration} />
-              <RiskSection title="行业集中度" data={risk.sector_concentration} />
-              <RiskSection title="回撤" data={risk.drawdown} />
-              <RiskSection title="止损监测" data={risk.stop_loss} />
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* 风险摘要：原始 K/V dump 信息密度低，先隐藏；保留 riskQ 调用以便后续重写 */}
 
       {/* 近期交易 */}
       <Card>
@@ -756,6 +773,47 @@ function AccountSelector({
   );
 }
 
+function RefreshIntervalSelector({
+  value,
+  onChange,
+  onManualRefresh,
+  isFetching,
+}: {
+  value: number;
+  onChange: (ms: number) => void;
+  onManualRefresh: () => void;
+  isFetching: boolean;
+}) {
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <span className="text-muted-foreground text-[11px]">刷新间隔</span>
+      <div className="flex flex-wrap items-center gap-1">
+        {REFRESH_OPTIONS.map((opt) => (
+          <Button
+            key={opt.value}
+            variant={value === opt.value ? 'default' : 'outline'}
+            size="sm"
+            className="h-7 px-2 text-xs"
+            onClick={() => onChange(opt.value)}
+          >
+            {opt.label}
+          </Button>
+        ))}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 px-2"
+          onClick={onManualRefresh}
+          disabled={isFetching}
+          title="立即刷新"
+        >
+          <RefreshCw className={cn('size-3.5', isFetching && 'animate-spin')} />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function OverviewCard({
   label,
   value,
@@ -848,7 +906,8 @@ function PositionRow({ p }: { p: PortfolioPosition }) {
         {(p.unrealized_pnl_base >= 0 ? '+' : '') + formatAmount(p.unrealized_pnl_base)}
       </TableCell>
       <TableCell className={cn('text-right tabular-nums', changeColor(p.unrealized_pnl_pct))}>
-        {formatPercent(p.unrealized_pnl_pct == null ? null : p.unrealized_pnl_pct * 100)}
+        {/* 后端 unrealized_pnl_pct 已是 0-100 百分比值,不应再 *100 (例如 -1.13 直接渲染为 "-1.13%") */}
+        {formatPercent(p.unrealized_pnl_pct)}
       </TableCell>
       <TableCell className="text-muted-foreground text-xs">{p.currency}</TableCell>
     </TableRow>
