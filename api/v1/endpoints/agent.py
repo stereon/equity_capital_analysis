@@ -389,6 +389,9 @@ async def agent_chat_stream(request: ChatRequest):
     session_id = request.session_id or str(uuid.uuid4())
     loop = asyncio.get_running_loop()
     queue: asyncio.Queue = asyncio.Queue()
+    # 立即把 session_id 送给客户端,让前端在第一个事件就能持久化。
+    # 这样客户端切走再回来时能定位到正在执行的会话,即使没等到 done。
+    queue.put_nowait({"type": "session", "session_id": session_id})
 
     # Pass explicit skills into context for the orchestrator.
     # Direct assignment so caller-provided skills always take precedence.

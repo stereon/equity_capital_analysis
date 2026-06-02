@@ -151,7 +151,9 @@ def _compute_dashboard(region: str) -> DashboardSnapshot:
         indices: List[IndexQuoteOut] = []
         try:
             raw = f_indices.result() or []
-            for idx in raw[:4]:
+            # A 股主要指数有 6 个（上证/深证/创业板/科创50/上证50/沪深300），
+            # 港美各自 3-4 个。展示上限提到 8 以兼容 cn 全集。
+            for idx in raw[:8]:
                 indices.append(
                     IndexQuoteOut(
                         code=str(idx.get("code") or ""),
