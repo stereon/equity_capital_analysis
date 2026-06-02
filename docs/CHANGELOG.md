@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 <!-- 新条目格式：- [类型] 描述（类型取值：新功能/改进/修复/文档/测试/chore）-->
 <!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->
+- [文档] 新增 `docs/data-sources-setup.md`，覆盖 .env 必需 / 可选数据源开关、雪球 cookie 获取与续期、时效窗口与 fundamental fetch 预算调优；README 加链接指向该文档。
+- [新功能] `DATA_SOURCE_DISABLE_EFINANCE` env 开关：阻断 push2.eastmoney 网络环境下跳过 efinance fetcher，避免 ERROR 噪音和 4 次 retry 雪崩。
+- [新功能] `CNINFO_DISCLOSURE_ENABLED` env 开关：启用巨潮资讯网公告搜索作为 SearchService 兜底（直连 hisAnnouncement HTTP，A 股 6 位代码自动触发）。
+- [新功能] `EM_STOCK_NEWS_ENABLED` env 开关：启用东方财富个股新闻搜索（akshare stock_news_em 走 search-api-web.eastmoney.com，不依赖 push2）。
+- [新功能] `XUEQIU_COOKIE` 环境变量：雪球登录态 cookie 用于 `fundamental_adapter.get_capital_flow`，提供 sum3/5/10/20 主力净额免费替代，cookie 30 天过期；失败 5 分钟冷却避免雪崩。
+- [改进] `tushare_fetcher.trade_cal` 优先 `exchange_calendars` 本地推算，免费等级不再触发 5 次/天限频；`stock_basic` 加 24h TTL 缓存 + 5min 失败冷却；`get_main_indices` 要求 ≥80% 完整度才返回，避免 partial 短路 fallback。
+- [改进] `base.get_realtime_quote` 60s 进程内缓存，让 fundamental.valuation 块和 realtime 块共用同一份腾讯报价，避免重复请求把 fetch budget 撑爆。
+- [改进] sina 龙虎榜 (stock_lhb_ggtj_sina) 替代被阻断的东财路径，DataFetcherManager 初始化时后台预热缓存。
+- [改进] dashboard A 股主要指数从 4 个放到 6 个（上证 / 深证 / 创业板 / 科创50 / 上证50 / 沪深300 全集）；chat SSE 增加 `session` 早期事件，让前端切走再回来能恢复会话。
+- [修复] 前端持仓 / 个股分析 / 候选股推荐多处把已是百分比值的字段再 *100 显示成 1200% / -101% 的渲染 bug。
+- [修复] 异步任务页（Analyze / Recommend）后端进程重启 task 字典清空后，前端不识别 404 → 永远卡在"进行中"且按钮锁死；改为识别 404 后清掉 stale task 解锁 UI。
+- [修复] chat 页 sessionId 没持久化导致切走再回来对话丢失；改为 localStorage 持久化 + streamingRef 防止 useEffect reload 覆盖正在 stream 的 AI 回复 + 最后一条是近期 user 时补"思考中…"占位。
+- [改进] 持仓页加刷新间隔选择器（30s / 1min / 3min / 5min / 手动），localStorage 持久化；移除信息密度低的"风险摘要"K/V dump 面板。
 - [改进] `scripts/fetch_tushare_stock_list.py` 可对 A 股中带 `XD`/`XR`/`DR`/`N`/`C` 前缀的名称进行回填修正，供自动补全刷新流程默认使用。
 - [修复] 股票自动补全索引生成缺少 `pypinyin` 时改为直接失败，避免写出缺失拼音字段的降级索引。
 - [修复] 归一腾讯实时行情成交量为股口径，避免量能变化倍数被放大并误导分析报告。

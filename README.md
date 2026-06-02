@@ -49,9 +49,12 @@ cp .env.example .env
 
 至少补齐：
 - `TUSHARE_TOKEN` —— Tushare A 股数据源
-- `TAVILY_API_KEYS` —— Tavily 新闻搜索
 - LLM 渠道：默认走本地 Claude CLI（需要本机已安装 `claude`），不另配 key 即可
 - 自选股 `STOCK_LIST=600519,hk00700,AAPL`
+
+可选增强：
+- 新闻 / 公告 / 主力资金等免费数据源接入（巨潮、东财个股新闻、雪球 cookie 等）见 [`docs/data-sources-setup.md`](docs/data-sources-setup.md)
+- LLM 渠道详细配置见 [`docs/LLM_CONFIG_GUIDE.md`](docs/LLM_CONFIG_GUIDE.md)
 
 ### 3. 启动 LLM shim（仅在用本地 Claude 时需要）
 
