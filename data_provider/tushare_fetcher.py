@@ -143,6 +143,15 @@ class TushareFetcher(BaseFetcher):
         self._api: Optional[object] = None  # Tushare API 实例
         self.date_list: Optional[List[str]] = None  # 交易日列表缓存（倒序，最新日期在前）
         self._date_list_end: Optional[str] = None  # 缓存对应的截止日期，用于跨日刷新
+        # stock_basic 接口 Tushare 限频 1 次/小时；A 股名单变化极慢（仅新 IPO），
+        # 缓存全字段 DataFrame 24 小时，多次查询走内存。
+        self._stock_basic_cache: Optional[pd.DataFrame] = None
+        self._stock_basic_cache_ts: float = 0.0
+        self._stock_basic_last_fail_ts: float = 0.0
+        self._STOCK_BASIC_CACHE_TTL_SECONDS: int = 24 * 3600
+        # 失败冷却：避免在 Tushare 限频时反复重试。5 分钟内 API 失败就不再
+        # 尝试，直接返回 None（或旧缓存）。
+        self._STOCK_BASIC_FAIL_COOLDOWN_SECONDS: int = 300
 
         # 尝试初始化 API
         self._init_api()
@@ -268,7 +277,12 @@ class TushareFetcher(BaseFetcher):
         return datetime.now(ZoneInfo("Asia/Shanghai"))
 
     def _get_trade_dates(self, end_date: Optional[str] = None) -> List[str]:
-        """按自然日刷新交易日历缓存，避免服务跨日后继续复用旧日历。"""
+        """按自然日刷新交易日历缓存，避免服务跨日后继续复用旧日历。
+
+        优先使用本地 exchange_calendars 库（无频率限制），失败时回退到
+        Tushare trade_cal 接口。后者在免费等级有 5 次/天的紧限制，长期主路径
+        应走本地解析。
+        """
         if self._api is None:
             return []
 
@@ -279,6 +293,15 @@ class TushareFetcher(BaseFetcher):
             return self.date_list
 
         start_date = (china_now - timedelta(days=20)).strftime("%Y%m%d")
+
+        # 优先：本地 exchange_calendars 推算
+        local_dates = self._resolve_local_trade_dates(start_date, requested_end_date)
+        if local_dates:
+            self.date_list = local_dates
+            self._date_list_end = requested_end_date
+            return local_dates
+
+        # 回退：Tushare trade_cal 接口
         df_cal = self._call_api_with_rate_limit(
             "trade_cal",
             exchange="SSE",
@@ -299,6 +322,89 @@ class TushareFetcher(BaseFetcher):
         self.date_list = trade_dates
         self._date_list_end = requested_end_date
         return trade_dates
+
+    def _get_stock_basic_cached(self) -> Optional[pd.DataFrame]:
+        """获取并缓存全 A 股 stock_basic 数据 (24h TTL)。
+
+        Tushare stock_basic 接口 1 次/小时限频，但数据基本不变（仅新 IPO 触发更新）。
+        缓存全字段 DataFrame，按需在调用方过滤行/列；同时刷新 stock_name_cache。
+        近期 API 失败时进入冷却期，避免反复触发同一限频。
+        """
+        import time as _time
+
+        now = _time.time()
+        if (
+            self._stock_basic_cache is not None
+            and now - self._stock_basic_cache_ts < self._STOCK_BASIC_CACHE_TTL_SECONDS
+        ):
+            return self._stock_basic_cache
+
+        if self._api is None:
+            return None
+
+        if now - self._stock_basic_last_fail_ts < self._STOCK_BASIC_FAIL_COOLDOWN_SECONDS:
+            # 冷却中：直接复用旧缓存（可能为 None），不再调 API
+            return self._stock_basic_cache
+
+        try:
+            self._check_rate_limit()
+            df = self._api.stock_basic(
+                exchange="",
+                list_status="L",
+                fields="ts_code,name,industry,area,market",
+            )
+        except Exception as exc:
+            self._stock_basic_last_fail_ts = now
+            logger.warning("[Tushare] stock_basic 刷新失败，继续复用旧缓存: %s", exc)
+            return self._stock_basic_cache
+
+        if df is None or df.empty:
+            return self._stock_basic_cache
+
+        df = df.copy()
+        df["code"] = df["ts_code"].astype(str).str.split(".").str[0]
+
+        self._stock_basic_cache = df
+        self._stock_basic_cache_ts = now
+
+        # 同步刷新名称缓存，避免后续单股查询再打 API
+        if not hasattr(self, "_stock_name_cache") or self._stock_name_cache is None:
+            self._stock_name_cache = {}
+        for _, row in df.iterrows():
+            code = row.get("code")
+            name = row.get("name")
+            if code and name:
+                self._stock_name_cache[code] = name
+
+        return df
+
+    @staticmethod
+    def _resolve_local_trade_dates(start_date: str, end_date: str) -> List[str]:
+        """用 exchange_calendars 推算 A 股交易日，返回 YYYYMMDD 字符串列表（降序）。
+
+        不可用或越界时返回空列表，由调用方决定是否回退 Tushare 接口。
+        """
+        try:
+            import exchange_calendars as xcals
+        except ImportError:
+            return []
+
+        try:
+            cal = xcals.get_calendar("XSHG")
+            start_iso = f"{start_date[:4]}-{start_date[4:6]}-{start_date[6:8]}"
+            end_iso = f"{end_date[:4]}-{end_date[4:6]}-{end_date[6:8]}"
+            sessions = cal.sessions_in_range(start_iso, end_iso)
+        except Exception as exc:
+            logger.debug("[Tushare] 本地交易日历推算失败，回退 trade_cal: %s", exc)
+            return []
+
+        if sessions is None or len(sessions) == 0:
+            return []
+
+        return sorted(
+            (session.strftime("%Y%m%d") for session in sessions),
+            reverse=True,
+        )
 
     @staticmethod
     def _pick_trade_date(trade_dates: List[str], use_today: bool) -> Optional[str]:
@@ -609,12 +715,16 @@ class TushareFetcher(BaseFetcher):
                 )
             else:
                 ts_code = self._convert_stock_code(stock_code)
-                # A 股股票：使用 stock_basic
-                df = self._api.stock_basic(
-                    ts_code=ts_code,
-                    fields='ts_code,name'
-                )
-            
+                # A 股股票：优先从 24h 缓存查 stock_basic 全表，避免触发 1 次/小时限频
+                df_full = self._get_stock_basic_cached()
+                if df_full is not None and not df_full.empty:
+                    df = df_full[df_full["ts_code"] == ts_code]
+                else:
+                    df = self._api.stock_basic(
+                        ts_code=ts_code,
+                        fields='ts_code,name'
+                    )
+
             if df is not None and not df.empty:
                 name = df.iloc[0]['name']
                 self._stock_name_cache[stock_code] = name
@@ -640,24 +750,11 @@ class TushareFetcher(BaseFetcher):
             return None
         
         try:
-            self._check_rate_limit()
-
-            df = self._api.stock_basic(
-                exchange='',
-                list_status='L',
-                fields='ts_code,name,industry,area,market'
-            )
+            # 走 24h 缓存避免触发 stock_basic 1 次/小时限频
+            df = self._get_stock_basic_cached()
 
             if df is None or df.empty:
                 return None
-
-            df = df.copy()
-            df['code'] = df['ts_code'].astype(str).str.split('.').str[0]
-
-            if not hasattr(self, '_stock_name_cache'):
-                self._stock_name_cache = {}
-            for _, row in df.iterrows():
-                self._stock_name_cache[row['code']] = row['name']
 
             logger.info(f"Tushare 获取股票列表成功: {len(df)} 条")
             return df[['code', 'name', 'industry', 'area', 'market']]
@@ -836,10 +933,19 @@ class TushareFetcher(BaseFetcher):
                     logger.debug(f"Tushare 获取指数 {name} 失败: {e}")
                     continue
 
-            if results:
+            # 严格完整性：免费等级 index_daily 经常只能拿到第 1 个（上证），剩下被
+            # 限频。返回 partial 会让 manager 的 fallback 短路，让用户看到残缺仪表盘。
+            # 仅当拿到至少 80% 指数时才视为本路径成功，否则返回 None 让 akshare 接管。
+            if results and len(results) >= int(len(indices_map) * 0.8):
                 return results
-            else:
+            if not results:
                 logger.warning("[Tushare] 未获取到指数行情数据")
+            else:
+                logger.info(
+                    "[Tushare] 仅拿到 %d/%d 个指数（多半因 index_daily 限频），"
+                    "回退到下一数据源以保证仪表盘完整",
+                    len(results), len(indices_map),
+                )
 
         except Exception as e:
             logger.error(f"[Tushare] 获取指数行情失败: {e}")
@@ -908,9 +1014,12 @@ class TushareFetcher(BaseFetcher):
                     # 为防止不同接口返回的列名大小写不一致（例如 rt_k 返回小写，daily 返回大写），统一将列名转为小写
                     df.columns = [col.lower() for col in df.columns]
 
-                    # 获取股票基础信息（包含代码和名称）
-                    df_basic = self._call_api_with_rate_limit("stock_basic", fields='ts_code,name')
-                    df = pd.merge(df, df_basic, on='ts_code', how='left')
+                    # 获取股票基础信息（包含代码和名称）—— 走 24h 缓存避开 1 次/小时限频
+                    df_basic = self._get_stock_basic_cached()
+                    if df_basic is None or df_basic.empty:
+                        # 缓存还没填 + API 也不可用时，跳过 name 合并，依然返回市场统计
+                        return self._calc_market_stats(df)
+                    df = pd.merge(df, df_basic[["ts_code", "name"]], on='ts_code', how='left')
                     # 将 daily的 amount 列的值乘以 1000 来和其他数据源保持一致
                     if 'amount' in df.columns:
                         df['amount'] = df['amount'] * 1000

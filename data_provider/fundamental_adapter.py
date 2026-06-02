@@ -9,11 +9,15 @@ endpoint candidates. It should never raise to caller; partial data is allowed.
 from __future__ import annotations
 
 import logging
+import os
 import re
+import threading
+import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -320,6 +324,175 @@ def _extract_latest_row(df: pd.DataFrame, stock_code: str) -> Optional[pd.Series
 class AkshareFundamentalAdapter:
     """AkShare adapter for fundamentals, capital flow and dragon-tiger signals."""
 
+    # sina ggtj 接口分页 7~22 次（按 symbol 决定），全量耗时 2.5~13 秒；缓存复用
+    # 跨股票分析。30 分钟内龙虎榜窗口结果稳定，足以覆盖一次批量分析任务。
+    _SINA_LHB_TTL_SECONDS = 1800
+    _SINA_LHB_PREWARM_SYMBOL = "30"
+    _sina_lhb_cache: Dict[str, Tuple[float, pd.DataFrame]] = {}
+    _sina_lhb_cache_lock = threading.Lock()
+    _sina_lhb_prewarm_started = False
+    _sina_lhb_prewarm_lock = threading.Lock()
+
+    def prewarm_sina_lhb(self) -> None:
+        """进程级单次后台预热 sina 龙虎榜缓存。
+
+        sina ggtj 接口冷启动 ~13 秒，而 fundamental stage budget 默认 8 秒，
+        导致首只股票分析时 dragon_tiger 必然 budget 不足。
+        在服务起来后立刻预热一次，让首次分析就能命中缓存。
+
+        由调用方（如 DataFetcherManager 初始化）显式触发，避免单测场景下
+        意外发起网络请求。
+        """
+        cls = type(self)
+        with cls._sina_lhb_prewarm_lock:
+            if cls._sina_lhb_prewarm_started:
+                return
+            cls._sina_lhb_prewarm_started = True
+
+        def _runner() -> None:
+            t0 = time.time()
+            logger.info(
+                "[FundamentalAdapter] sina LHB 预热开始 (symbol=%s)",
+                cls._SINA_LHB_PREWARM_SYMBOL,
+            )
+            try:
+                df = self._get_sina_lhb_df(cls._SINA_LHB_PREWARM_SYMBOL)
+            except Exception as exc:  # 预热失败不影响主流程
+                logger.warning(
+                    "[FundamentalAdapter] sina LHB 预热异常: %s", exc
+                )
+                return
+            elapsed = time.time() - t0
+            if df is None:
+                logger.warning(
+                    "[FundamentalAdapter] sina LHB 预热未拿到数据，耗时 %.1fs", elapsed
+                )
+            else:
+                logger.info(
+                    "[FundamentalAdapter] sina LHB 预热完成: %d 行，耗时 %.1fs",
+                    len(df), elapsed,
+                )
+
+        thread = threading.Thread(
+            target=_runner,
+            daemon=True,
+            name="sina-lhb-prewarm",
+        )
+        thread.start()
+
+    def _get_sina_lhb_df(self, symbol: str) -> Optional[pd.DataFrame]:
+        """读取 / 拉取并缓存 sina 龙虎榜统计 DataFrame。
+
+        即使首次调用因上游 budget 超时被中断，本方法的 worker thread 仍会
+        把结果填进类级缓存，下一次分析直接命中。
+        """
+        cached = self._peek_sina_lhb_df(symbol)
+        if cached is not None:
+            return cached
+
+        df, _source, _errors = self._call_df_candidates([
+            ("stock_lhb_ggtj_sina", {"symbol": symbol}),
+        ])
+        if df is None:
+            return None
+
+        with self._sina_lhb_cache_lock:
+            self._sina_lhb_cache[symbol] = (time.time(), df)
+        return df
+
+    def _peek_sina_lhb_df(self, symbol: str) -> Optional[pd.DataFrame]:
+        """只读缓存：命中且未过期返回 DataFrame；否则返回 None（不发起请求）。"""
+        now = time.time()
+        with self._sina_lhb_cache_lock:
+            entry = self._sina_lhb_cache.get(symbol)
+            if entry is None:
+                return None
+            cached_at, cached_df = entry
+            if now - cached_at >= self._SINA_LHB_TTL_SECONDS:
+                return None
+            return cached_df
+
+    def try_dragon_tiger_from_cache(
+        self, stock_code: str, lookback_days: int = 20
+    ) -> Optional[Dict[str, Any]]:
+        """缓存命中时返回完整 dragon_tiger payload；冷缓存时返回 None。
+
+        让上游 `get_dragon_tiger_context` 在 fundamental stage budget 已耗尽
+        的情况下也能秒回缓存结果，避免 sina 路径被预算机制误伤。
+        """
+        if lookback_days <= 0 or lookback_days > 60:
+            return None
+
+        if lookback_days <= 5:
+            symbol = "5"
+        elif lookback_days <= 10:
+            symbol = "10"
+        elif lookback_days <= 30:
+            symbol = "30"
+        else:
+            symbol = "60"
+
+        cached_df = self._peek_sina_lhb_df(symbol)
+        if cached_df is None:
+            return None
+
+        # 已缓存：复用 _dragon_tiger_via_sina 的解析逻辑，但需手工传 df
+        # （避免它再次走 _get_sina_lhb_df 的请求兜底）。
+        return self._parse_sina_lhb_df(cached_df, stock_code, symbol)
+
+    def _parse_sina_lhb_df(
+        self, df: pd.DataFrame, stock_code: str, symbol: str
+    ) -> Dict[str, Any]:
+        """将 sina ggtj DataFrame 解析为 dragon_tiger payload。"""
+        result: Dict[str, Any] = {
+            "status": "ok",
+            "is_on_list": False,
+            "recent_count": 0,
+            "latest_date": None,
+            "source_chain": [f"dragon_tiger:stock_lhb_ggtj_sina#window_{symbol}d"],
+            "errors": [],
+        }
+
+        code_cols = [
+            c for c in df.columns
+            if any(k in str(c) for k in ("代码", "股票代码", "证券代码"))
+        ]
+        if not code_cols:
+            result["status"] = "partial"
+            return result
+
+        target = _normalize_code(stock_code)
+        matched = pd.DataFrame()
+        for col in code_cols:
+            try:
+                series = df[col].astype(str).map(_normalize_code)
+                cur = df[series == target]
+                if not cur.empty:
+                    matched = cur
+                    break
+            except Exception:
+                continue
+
+        if matched.empty:
+            return result
+
+        count_col = next(
+            (c for c in matched.columns if any(k in str(c) for k in ("上榜次数", "次数"))),
+            None,
+        )
+        if count_col is not None:
+            try:
+                count_value = int(matched.iloc[0][count_col])
+            except (TypeError, ValueError):
+                count_value = 0
+            result["recent_count"] = count_value
+            result["is_on_list"] = count_value > 0
+        else:
+            result["recent_count"] = int(len(matched))
+            result["is_on_list"] = True
+
+        return result
+
     def _call_df_candidates(
         self,
         candidates: List[Tuple[str, Dict[str, Any]]],
@@ -480,6 +653,9 @@ class AkshareFundamentalAdapter:
     def get_capital_flow(self, stock_code: str, top_n: int = 5) -> Dict[str, Any]:
         """
         Return stock + sector capital flow.
+
+        个股资金流优先雪球（如配置了 XUEQIU_COOKIE），否则回退到 akshare 各路径
+        （多数走 push2.eastmoney 容易被网络阻断）。板块资金流仍走 akshare。
         """
         result: Dict[str, Any] = {
             "status": "not_supported",
@@ -489,31 +665,46 @@ class AkshareFundamentalAdapter:
             "errors": [],
         }
 
-        stock_df, stock_source, stock_errors = self._call_df_candidates([
-            ("stock_individual_fund_flow", {"stock": stock_code}),
-            ("stock_individual_fund_flow", {"symbol": stock_code}),
-            ("stock_individual_fund_flow", {}),
-            ("stock_main_fund_flow", {"symbol": stock_code}),
-            ("stock_main_fund_flow", {}),
-        ])
-        result["errors"].extend(stock_errors)
-        if stock_df is not None:
-            row = _extract_latest_row(stock_df, stock_code)
-            if row is not None:
-                net_inflow = _safe_float(_pick_by_keywords(row, ["主力净流入", "净流入", "净额"]))
-                inflow_5d = _safe_float(_pick_by_keywords(row, ["5日", "五日"]))
-                inflow_10d = _safe_float(_pick_by_keywords(row, ["10日", "十日"]))
-                result["stock_flow"] = {
-                    "main_net_inflow": net_inflow,
-                    "inflow_5d": inflow_5d,
-                    "inflow_10d": inflow_10d,
-                }
-                result["source_chain"].append(f"capital_stock:{stock_source}")
+        # 优先：雪球 capital/history 个股资金流
+        xq_payload = self._stock_capital_flow_via_xueqiu(stock_code)
+        skip_sector = False
+        if xq_payload is not None:
+            result["stock_flow"] = xq_payload["stock_flow"]
+            result["source_chain"].append(f"capital_stock:{xq_payload['source']}")
+            # 雪球已拿到 stock_flow；akshare 板块资金流走的 push2 在被阻断的
+            # 网络下要 retry 几秒才放弃，会撑爆 fundamental fetch budget。
+            # 个股资金流是 AI 主要消费维度，sector_rankings 是 nice-to-have，
+            # 这里直接跳过 sector 部分，整块以 stock_flow 返回 partial。
+            skip_sector = True
+        else:
+            stock_df, stock_source, stock_errors = self._call_df_candidates([
+                ("stock_individual_fund_flow", {"stock": stock_code}),
+                ("stock_individual_fund_flow", {"symbol": stock_code}),
+                ("stock_individual_fund_flow", {}),
+                ("stock_main_fund_flow", {"symbol": stock_code}),
+                ("stock_main_fund_flow", {}),
+            ])
+            result["errors"].extend(stock_errors)
+            if stock_df is not None:
+                row = _extract_latest_row(stock_df, stock_code)
+                if row is not None:
+                    net_inflow = _safe_float(_pick_by_keywords(row, ["主力净流入", "净流入", "净额"]))
+                    inflow_5d = _safe_float(_pick_by_keywords(row, ["5日", "五日"]))
+                    inflow_10d = _safe_float(_pick_by_keywords(row, ["10日", "十日"]))
+                    result["stock_flow"] = {
+                        "main_net_inflow": net_inflow,
+                        "inflow_5d": inflow_5d,
+                        "inflow_10d": inflow_10d,
+                    }
+                    result["source_chain"].append(f"capital_stock:{stock_source}")
 
-        sector_df, sector_source, sector_errors = self._call_df_candidates([
-            ("stock_sector_fund_flow_rank", {}),
-            ("stock_sector_fund_flow_summary", {}),
-        ])
+        if skip_sector:
+            sector_df, sector_source, sector_errors = None, None, []
+        else:
+            sector_df, sector_source, sector_errors = self._call_df_candidates([
+                ("stock_sector_fund_flow_rank", {}),
+                ("stock_sector_fund_flow_summary", {}),
+            ])
         result["errors"].extend(sector_errors)
         if sector_df is not None:
             name_col = next((c for c in sector_df.columns if any(k in str(c) for k in ("板块", "行业", "名称", "name"))), None)
@@ -534,9 +725,104 @@ class AkshareFundamentalAdapter:
         result["status"] = "partial" if has_content else "not_supported"
         return result
 
+    # ----- 雪球资金流（替代被阻断的 push2.eastmoney 路径）-----
+
+    _XUEQIU_CAPITAL_HISTORY_URL = "https://stock.xueqiu.com/v5/stock/capital/history.json"
+    _XUEQIU_REQUEST_TIMEOUT = 5.0
+    # cookie 失败冷却：避免 cookie 过期时反复打 401
+    _xueqiu_capital_last_fail_ts: float = 0.0
+    _XUEQIU_CAPITAL_FAIL_COOLDOWN_SECONDS: float = 300.0
+
+    @staticmethod
+    def _to_xueqiu_symbol(stock_code: str) -> Optional[str]:
+        """A 股代码加 SH/SZ 前缀。0/3 → SZ；6/8/9 → SH。"""
+        code = (stock_code or "").strip()
+        if len(code) != 6 or not code.isdigit():
+            return None
+        if code[:1] in ("6", "8", "9"):
+            return f"SH{code}"
+        return f"SZ{code}"
+
+    def _stock_capital_flow_via_xueqiu(
+        self, stock_code: str
+    ) -> Optional[Dict[str, Any]]:
+        """从雪球 capital/history 拿主力净额 sum3/sum5/sum10/sum20。
+
+        返回 dict 含 stock_flow 子字段；cookie 未配置 / 失败时返回 None，
+        让调用方回退 akshare 候选链。
+        """
+        cookie = (os.getenv("XUEQIU_COOKIE") or "").strip()
+        if not cookie:
+            return None
+
+        symbol = self._to_xueqiu_symbol(stock_code)
+        if not symbol:
+            return None
+
+        # 失败冷却：避免 cookie 过期时反复重试
+        now = time.time()
+        cls = type(self)
+        if now - cls._xueqiu_capital_last_fail_ts < cls._XUEQIU_CAPITAL_FAIL_COOLDOWN_SECONDS:
+            return None
+
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            ),
+            "Referer": "https://xueqiu.com/",
+            "Cookie": cookie,
+        }
+        try:
+            resp = requests.get(
+                self._XUEQIU_CAPITAL_HISTORY_URL,
+                params={"symbol": symbol, "count": 5},
+                headers=headers,
+                timeout=self._XUEQIU_REQUEST_TIMEOUT,
+            )
+            resp.raise_for_status()
+            body = resp.json()
+        except Exception as exc:
+            cls._xueqiu_capital_last_fail_ts = now
+            logger.warning("[Xueqiu] capital/history 失败，进入冷却: %s", exc)
+            return None
+
+        if body.get("error_code") not in (0, None) and not body.get("data"):
+            cls._xueqiu_capital_last_fail_ts = now
+            logger.warning(
+                "[Xueqiu] capital/history 返回错误 (cookie 可能已过期): "
+                "error_code=%s msg=%s",
+                body.get("error_code"),
+                body.get("error_description") or body.get("msg"),
+            )
+            return None
+
+        data = body.get("data") or {}
+        items = data.get("items") or []
+        latest = items[-1] if items else None
+        latest_amount = float(latest["amount"]) if isinstance(latest, dict) and "amount" in latest else None
+
+        sum5 = data.get("sum5")
+        sum10 = data.get("sum10")
+        return {
+            "source": "xueqiu_capital_history",
+            "stock_flow": {
+                "main_net_inflow": latest_amount,
+                "inflow_5d": float(sum5) if sum5 is not None else None,
+                "inflow_10d": float(sum10) if sum10 is not None else None,
+            },
+        }
+
+    # ----- 龙虎榜 -----
+
     def get_dragon_tiger_flag(self, stock_code: str, lookback_days: int = 20) -> Dict[str, Any]:
         """
         Return dragon-tiger signal in lookback window.
+
+        优先尝试 sina 路径 (`stock_lhb_ggtj_sina`)：在东财接口被网络阻断
+        的环境下也能拿到上榜次数；该接口仅支持 5/10/30/60 天的预设窗口，
+        当 lookback_days <= 30 时映射到 30 天窗口（轻微 overshoot 可接受），
+        否则回退到原有东财候选链。
         """
         result: Dict[str, Any] = {
             "status": "not_supported",
@@ -546,6 +832,11 @@ class AkshareFundamentalAdapter:
             "source_chain": [],
             "errors": [],
         }
+
+        # 优先：sina 个股上榜统计（无需 token，网络稳定）
+        sina_payload = self._dragon_tiger_via_sina(stock_code, lookback_days)
+        if sina_payload is not None:
+            return sina_payload
 
         df, source, errors = self._call_df_candidates([
             ("stock_lhb_stock_statistic_em", {}),
@@ -594,3 +885,37 @@ class AkshareFundamentalAdapter:
         result["status"] = "ok"
         result["source_chain"].append(f"dragon_tiger:{source}")
         return result
+
+    def _dragon_tiger_via_sina(
+        self, stock_code: str, lookback_days: int
+    ) -> Optional[Dict[str, Any]]:
+        """通过 akshare sina 接口拿龙虎榜上榜统计。
+
+        sina 接口窗口固定，映射如下：
+        - lookback_days <= 5 → "5"
+        - 5 < lookback_days <= 10 → "10"
+        - 10 < lookback_days <= 30 → "30"
+        - 30 < lookback_days <= 60 → "60"
+        - lookback_days > 60 时返回 None，调用方回退东财候选链。
+
+        返回完整的 dragon_tiger payload；接口失败 / 缺字段 / 越界时返回 None。
+
+        sina 接口分页较多（30 天窗口约 13 秒），结果在类级缓存复用，避免
+        多股票分析时反复全量拉取。
+        """
+        if lookback_days <= 0 or lookback_days > 60:
+            return None
+
+        if lookback_days <= 5:
+            symbol = "5"
+        elif lookback_days <= 10:
+            symbol = "10"
+        elif lookback_days <= 30:
+            symbol = "30"
+        else:
+            symbol = "60"
+
+        df = self._get_sina_lhb_df(symbol)
+        if df is None:
+            return None
+        return self._parse_sina_lhb_df(df, stock_code, symbol)

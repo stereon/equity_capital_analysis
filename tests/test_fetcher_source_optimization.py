@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Regression tests for fetcher routing and optional-source pruning."""
 
+import os
 import sys
 import unittest
 from types import SimpleNamespace
@@ -58,6 +59,7 @@ def _make_daily_df() -> pd.DataFrame:
 
 
 class TestFetcherSourceOptimization(unittest.TestCase):
+    @patch.dict(os.environ, {"DATA_SOURCE_DISABLE_EFINANCE": ""}, clear=False)
     @patch("src.config.get_config")
     def test_manager_skips_unconfigured_optional_fetchers(self, mock_get_config):
         mock_get_config.return_value = SimpleNamespace(

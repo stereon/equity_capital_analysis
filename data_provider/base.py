@@ -15,6 +15,7 @@
 """
 
 import logging
+import os
 import random
 import time
 from threading import BoundedSemaphore, RLock, Thread
@@ -606,6 +607,18 @@ class DataFetcherManager:
         self._fundamental_cache_lock = RLock()
         self._fundamental_timeout_worker_limit = 8
         self._fundamental_timeout_slots = BoundedSemaphore(self._fundamental_timeout_worker_limit)
+        # 短期实时行情缓存：一次分析里 realtime 块和 fundamental.valuation 块会
+        # 各自调一次 get_realtime_quote()，腾讯路径 3.8s 容易把 valuation 的 3s
+        # budget 撑爆。60s 内复用同一结果避免重复拉取 + budget 雪崩。
+        self._realtime_quote_cache: Dict[str, Tuple[float, Any]] = {}
+        self._realtime_quote_cache_lock = RLock()
+        self._REALTIME_QUOTE_CACHE_TTL_SECONDS: float = 60.0
+
+        # 后台预热 sina 龙虎榜（不阻塞），让首只股票分析就能命中缓存。
+        try:
+            self._fundamental_adapter.prewarm_sina_lhb()
+        except Exception as exc:
+            logger.debug("[数据源初始化] sina LHB 预热触发失败: %s", exc)
 
     def _ensure_concurrency_guards(self) -> None:
         """Lazily initialize thread-safety primitives for test scaffolds using __new__."""
@@ -1060,7 +1073,11 @@ class DataFetcherManager:
         from .longbridge_fetcher import LongbridgeFetcher
         config = get_config()
         # 创建所有数据源实例（优先级在各 Fetcher 的 __init__ 中确定）
-        efinance = EfinanceFetcher()
+        if os.getenv('DATA_SOURCE_DISABLE_EFINANCE', '').strip().lower() in ('1', 'true', 'yes', 'on'):
+            logger.info("[数据源初始化] DATA_SOURCE_DISABLE_EFINANCE 已启用，跳过 EfinanceFetcher")
+            efinance = None
+        else:
+            efinance = EfinanceFetcher()
         akshare = AkshareFetcher()
         pytdx = PytdxFetcher()      # 通达信数据源（可配 PYTDX_HOST/PYTDX_PORT）
         baostock = BaostockFetcher()
@@ -1101,7 +1118,7 @@ class DataFetcherManager:
         self._ensure_concurrency_guards()
         with self._fetchers_lock:
             self._fetchers = [
-                efinance,
+                *([efinance] if efinance is not None else []),
                 akshare,
                 pytdx,
                 baostock,
@@ -1116,7 +1133,7 @@ class DataFetcherManager:
         # 构建优先级说明
         priority_info = ", ".join([f"{f.name}(P{f.priority})" for f in self._get_fetchers_snapshot()])
         logger.info(f"已初始化 {len(self._fetchers)} 个数据源（按优先级）: {priority_info}")
-    
+
     def add_fetcher(self, fetcher: BaseFetcher) -> None:
         """添加数据源并重新排序"""
         self._ensure_concurrency_guards()
@@ -1434,9 +1451,38 @@ class DataFetcherManager:
             return 0
     
     def get_realtime_quote(self, stock_code: str, *, log_final_failure: bool = True):
+        """获取实时行情，带 60s 进程内缓存。
+
+        实际查询逻辑在 :meth:`_get_realtime_quote_uncached`；此层负责命中检查 +
+        成功结果写回，让同一分析任务里 realtime / valuation 两条路径复用同一份
+        quote，避免重复触发 3.8s 级别的腾讯请求把后端 budget 撑爆。
         """
-        获取实时行情数据（自动故障切换）
-        
+        normalized = normalize_stock_code((stock_code or "").strip())
+        now_ts = time.time()
+        with self._realtime_quote_cache_lock:
+            cached = self._realtime_quote_cache.get(normalized)
+            if cached is not None:
+                cached_at, cached_quote = cached
+                if now_ts - cached_at < self._REALTIME_QUOTE_CACHE_TTL_SECONDS:
+                    return cached_quote
+
+        quote = self._get_realtime_quote_uncached(
+            stock_code,
+            log_final_failure=log_final_failure,
+        )
+        if quote is not None:
+            with self._realtime_quote_cache_lock:
+                self._realtime_quote_cache[normalized] = (time.time(), quote)
+        return quote
+
+    def _get_realtime_quote_uncached(
+        self,
+        stock_code: str,
+        *,
+        log_final_failure: bool = True,
+    ):
+        """实时行情真实查询逻辑（无缓存层）。
+
         故障切换策略（按配置的优先级）：
         1. 美股：使用 YfinanceFetcher.get_realtime_quote()
         2. EfinanceFetcher.get_realtime_quote()
@@ -1444,14 +1490,6 @@ class DataFetcherManager:
         4. AkshareFetcher.get_realtime_quote(source="sina") - 新浪
         5. AkshareFetcher.get_realtime_quote(source="tencent") - 腾讯
         6. 返回 None（降级兜底）
-        
-        Args:
-            stock_code: 股票代码
-            log_final_failure: Whether to emit the final "all sources failed"
-                summary log when no realtime quote is available.
-            
-        Returns:
-            UnifiedRealtimeQuote 对象，所有数据源都失败则返回 None
         """
         raw_stock_code = (stock_code or "").strip()
         # Normalize code (strip SH/SZ prefix etc.)
@@ -2903,6 +2941,26 @@ class DataFetcherManager:
                 {},
                 [{"provider": "fundamental_pipeline", "result": "not_supported", "duration_ms": 0}],
                 ["not supported"],
+            )
+
+        # 缓存快速路径：即使 stage budget 已耗尽，sina 龙虎榜热缓存仍能秒回；
+        # 不走 _run_with_retry，避免预算机制把零成本的 lookup 误判为超时。
+        cached_payload = self._fundamental_adapter.try_dragon_tiger_from_cache(stock_code)
+        if isinstance(cached_payload, dict):
+            return self._build_fundamental_block(
+                cached_payload.get("status") if isinstance(cached_payload.get("status"), str) else "ok",
+                {
+                    "is_on_list": bool(cached_payload.get("is_on_list", False)),
+                    "recent_count": int(cached_payload.get("recent_count", 0)),
+                    "latest_date": cached_payload.get("latest_date"),
+                },
+                self._normalize_source_chain(
+                    cached_payload.get("source_chain", []),
+                    "dragon_tiger",
+                    str(cached_payload.get("status", "ok")),
+                    0,
+                ),
+                list(cached_payload.get("errors", [])),
             )
 
         if timeout <= 0:

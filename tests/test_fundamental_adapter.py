@@ -6,6 +6,7 @@ Tests for fundamental adapter helpers.
 import os
 import sys
 import unittest
+import unittest.mock
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
@@ -22,6 +23,10 @@ from data_provider.fundamental_adapter import (
 
 
 class TestFundamentalAdapter(unittest.TestCase):
+    def setUp(self) -> None:
+        # 类级 sina 缓存可能被前一个测试污染，每次测试前清空
+        AkshareFundamentalAdapter._sina_lhb_cache.clear()
+
     def test_parse_dividend_plan_to_per_share_supports_cn_patterns(self) -> None:
         self.assertAlmostEqual(_parse_dividend_plan_to_per_share("10派3元(含税)"), 0.3, places=6)
         self.assertAlmostEqual(_parse_dividend_plan_to_per_share("每10股派发2.5元"), 0.25, places=6)
@@ -52,7 +57,12 @@ class TestFundamentalAdapter(unittest.TestCase):
                 "日期": ["2026-01-01"],
             }
         )
-        with patch.object(adapter, "_call_df_candidates", return_value=(df, "stock_lhb_stock_statistic_em", [])):
+        with patch.object(
+            adapter, "_dragon_tiger_via_sina", return_value=None
+        ), patch.object(
+            adapter, "_call_df_candidates",
+            return_value=(df, "stock_lhb_stock_statistic_em", []),
+        ):
             result = adapter.get_dragon_tiger_flag("600519")
         self.assertEqual(result["status"], "ok")
         self.assertFalse(result["is_on_list"])
@@ -67,11 +77,167 @@ class TestFundamentalAdapter(unittest.TestCase):
                 "日期": [today],
             }
         )
-        with patch.object(adapter, "_call_df_candidates", return_value=(df, "stock_lhb_stock_statistic_em", [])):
+        with patch.object(
+            adapter, "_dragon_tiger_via_sina", return_value=None
+        ), patch.object(
+            adapter, "_call_df_candidates",
+            return_value=(df, "stock_lhb_stock_statistic_em", []),
+        ):
             result = adapter.get_dragon_tiger_flag("600519")
         self.assertEqual(result["status"], "ok")
         self.assertTrue(result["is_on_list"])
         self.assertGreaterEqual(result["recent_count"], 1)
+
+    def test_capital_flow_uses_xueqiu_when_cookie_configured(self) -> None:
+        """配置了 XUEQIU_COOKIE 时，stock_flow 应取自雪球，不打 akshare。"""
+        adapter = AkshareFundamentalAdapter()
+        sample = {
+            "data": {
+                "sum5": 800_000_000.0,
+                "sum10": -200_000_000.0,
+                "items": [
+                    {"amount": 100_000_000.0, "timestamp": 1700000000000},
+                    {"amount": 50_000_000.0, "timestamp": 1700086400000},
+                ],
+            },
+            "error_code": 0,
+        }
+        mock_resp = unittest.mock.MagicMock()
+        mock_resp.json = unittest.mock.MagicMock(return_value=sample)
+        mock_resp.raise_for_status = unittest.mock.MagicMock()
+
+        with patch.dict(os.environ, {"XUEQIU_COOKIE": "xq_a_token=fake"}, clear=False), \
+             patch("data_provider.fundamental_adapter.requests.get", return_value=mock_resp) as get_mock, \
+             patch.object(
+                 adapter, "_call_df_candidates", return_value=(None, None, [])
+             ) as call_mock:
+            # 重置 cooldown
+            AkshareFundamentalAdapter._xueqiu_capital_last_fail_ts = 0.0
+            result = adapter.get_capital_flow("600519")
+
+        # 资金流字段应该来自雪球
+        self.assertEqual(result["stock_flow"]["main_net_inflow"], 50_000_000.0)
+        self.assertEqual(result["stock_flow"]["inflow_5d"], 800_000_000.0)
+        self.assertEqual(result["stock_flow"]["inflow_10d"], -200_000_000.0)
+        # source_chain 标记 xueqiu_capital_history
+        self.assertTrue(
+            any("xueqiu_capital_history" in s for s in result["source_chain"])
+        )
+        # 走了雪球，akshare stock_individual_fund_flow 候选链不应被调
+        # （但板块 capital flow 还会调 stock_sector_fund_flow_rank）
+        for args, _ in call_mock.call_args_list:
+            candidates = args[0]
+            for fn_name, _ in candidates:
+                self.assertNotEqual(fn_name, "stock_individual_fund_flow")
+
+        # 入参校验：URL + symbol 前缀
+        get_mock.assert_called_once()
+        kwargs = get_mock.call_args.kwargs
+        self.assertIn("symbol", kwargs.get("params", {}))
+        self.assertEqual(kwargs["params"]["symbol"], "SH600519")
+
+    def test_capital_flow_xueqiu_szse_routing(self) -> None:
+        """000001 深圳股应路由到 SZ 前缀。"""
+        adapter = AkshareFundamentalAdapter()
+        mock_resp = unittest.mock.MagicMock()
+        mock_resp.json = unittest.mock.MagicMock(
+            return_value={"data": {"items": [], "sum5": 0, "sum10": 0}, "error_code": 0}
+        )
+        mock_resp.raise_for_status = unittest.mock.MagicMock()
+
+        with patch.dict(os.environ, {"XUEQIU_COOKIE": "xq_a_token=fake"}, clear=False), \
+             patch("data_provider.fundamental_adapter.requests.get", return_value=mock_resp) as get_mock, \
+             patch.object(adapter, "_call_df_candidates", return_value=(None, None, [])):
+            AkshareFundamentalAdapter._xueqiu_capital_last_fail_ts = 0.0
+            adapter.get_capital_flow("000001")
+
+        self.assertEqual(get_mock.call_args.kwargs["params"]["symbol"], "SZ000001")
+
+    def test_capital_flow_xueqiu_cooldown_after_failure(self) -> None:
+        """请求失败应进入 5 分钟冷却，期间不再打雪球。"""
+        adapter = AkshareFundamentalAdapter()
+        AkshareFundamentalAdapter._xueqiu_capital_last_fail_ts = 0.0
+
+        with patch.dict(os.environ, {"XUEQIU_COOKIE": "xq_a_token=fake"}, clear=False), \
+             patch(
+                 "data_provider.fundamental_adapter.requests.get",
+                 side_effect=RuntimeError("network down"),
+             ) as get_mock, \
+             patch.object(adapter, "_call_df_candidates", return_value=(None, None, [])):
+            adapter.get_capital_flow("600519")
+            adapter.get_capital_flow("600519")
+            adapter.get_capital_flow("600519")
+
+        # 第一次打 → 失败 → 冷却；后两次不打
+        self.assertEqual(get_mock.call_count, 1)
+
+    def test_capital_flow_falls_back_to_akshare_when_no_cookie(self) -> None:
+        """未配置 XUEQIU_COOKIE 时不应碰雪球，仍走 akshare 候选链。"""
+        adapter = AkshareFundamentalAdapter()
+
+        with patch.dict(os.environ, {"XUEQIU_COOKIE": ""}, clear=False), \
+             patch("data_provider.fundamental_adapter.requests.get") as get_mock, \
+             patch.object(adapter, "_call_df_candidates", return_value=(None, None, [])):
+            AkshareFundamentalAdapter._xueqiu_capital_last_fail_ts = 0.0
+            adapter.get_capital_flow("600519")
+
+        get_mock.assert_not_called()
+
+    def test_dragon_tiger_sina_path_short_circuits_em(self) -> None:
+        """sina 接口返回非空 DataFrame 时不应再调用东财候选链。"""
+        adapter = AkshareFundamentalAdapter()
+        sina_df = pd.DataFrame(
+            {
+                "股票代码": ["002185"],
+                "股票名称": ["华天科技"],
+                "上榜次数": [4],
+                "累积购买额": [1208122.4],
+            }
+        )
+        em_call_mock = unittest.mock.MagicMock(
+            return_value=(None, None, ["stock_lhb_stock_statistic_em:Blocked"])
+        )
+
+        original_call = adapter._call_df_candidates
+
+        def fake_call(candidates):
+            # 第一次调用是 sina 路径，返回真数据；后续才走 em
+            if candidates and candidates[0][0] == "stock_lhb_ggtj_sina":
+                return (sina_df, "stock_lhb_ggtj_sina", [])
+            return em_call_mock(candidates)
+
+        with patch.object(adapter, "_call_df_candidates", side_effect=fake_call):
+            result = adapter.get_dragon_tiger_flag("002185", lookback_days=20)
+
+        self.assertEqual(result["status"], "ok")
+        self.assertTrue(result["is_on_list"])
+        self.assertEqual(result["recent_count"], 4)
+        self.assertTrue(
+            any("stock_lhb_ggtj_sina" in s for s in result["source_chain"])
+        )
+        em_call_mock.assert_not_called()
+
+    def test_dragon_tiger_sina_path_returns_zero_when_not_on_list(self) -> None:
+        """sina 接口数据存在但目标股票未上榜：is_on_list=False, recent_count=0。"""
+        adapter = AkshareFundamentalAdapter()
+        sina_df = pd.DataFrame(
+            {
+                "股票代码": ["000001"],
+                "股票名称": ["平安银行"],
+                "上榜次数": [2],
+            }
+        )
+
+        with patch.object(
+            adapter,
+            "_call_df_candidates",
+            return_value=(sina_df, "stock_lhb_ggtj_sina", []),
+        ):
+            result = adapter.get_dragon_tiger_flag("600519", lookback_days=20)
+
+        self.assertEqual(result["status"], "ok")
+        self.assertFalse(result["is_on_list"])
+        self.assertEqual(result["recent_count"], 0)
 
     def test_fundamental_bundle_includes_financial_report_and_dividend_payload(self) -> None:
         adapter = AkshareFundamentalAdapter()
