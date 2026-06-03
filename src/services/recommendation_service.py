@@ -109,8 +109,56 @@ def _safe_get_name(manager: DataFetcherManager, code: str) -> str:
         return ""
 
 
+_STOCK_BASIC_CACHE_PATH = Path("data/stock_basic_cache.json")
+_STOCK_BASIC_TTL = 24 * 3600  # 行业/名称基本静态,缓存一天即可
+# 进程内缓存,避免每次荐股都读盘
+_STOCK_BASIC_MEM: Dict[str, Any] = {"ts": 0.0, "industry": {}, "name": {}}
+
+
+def _read_stock_basic_cache(ignore_ttl: bool = False) -> Optional[Tuple[Dict[str, str], Dict[str, str]]]:
+    """读 stock_basic 缓存(内存优先,再落盘)。ignore_ttl=True 时即使过期也返回(兜底)。"""
+    import time
+
+    now = time.time()
+    if _STOCK_BASIC_MEM["name"] and (ignore_ttl or now - _STOCK_BASIC_MEM["ts"] < _STOCK_BASIC_TTL):
+        return _STOCK_BASIC_MEM["industry"], _STOCK_BASIC_MEM["name"]
+    try:
+        if _STOCK_BASIC_CACHE_PATH.exists():
+            import json
+
+            data = json.loads(_STOCK_BASIC_CACHE_PATH.read_text(encoding="utf-8"))
+            if data.get("name") and (ignore_ttl or now - float(data.get("ts", 0)) < _STOCK_BASIC_TTL):
+                _STOCK_BASIC_MEM.update(ts=float(data.get("ts", 0)), industry=data.get("industry", {}), name=data.get("name", {}))
+                return _STOCK_BASIC_MEM["industry"], _STOCK_BASIC_MEM["name"]
+    except Exception as e:
+        logger.debug(f"[Recommend] 读 stock_basic 缓存失败: {e}")
+    return None
+
+
+def _write_stock_basic_cache(industry: Dict[str, str], name: Dict[str, str]) -> None:
+    import json
+    import time
+
+    _STOCK_BASIC_MEM.update(ts=time.time(), industry=industry, name=name)
+    try:
+        _STOCK_BASIC_CACHE_PATH.parent.mkdir(exist_ok=True)
+        _STOCK_BASIC_CACHE_PATH.write_text(
+            json.dumps({"ts": _STOCK_BASIC_MEM["ts"], "industry": industry, "name": name}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+    except Exception as e:
+        logger.debug(f"[Recommend] 写 stock_basic 缓存失败: {e}")
+
+
 def _get_stock_basic_maps(pro) -> Tuple[Dict[str, str], Dict[str, str]]:
-    """(industry_map, name_map),key 是 6 位 symbol。"""
+    """(industry_map, name_map),key 是 6 位 symbol。
+
+    stock_basic 接口限频(部分套餐 1 次/小时),而行业/名称基本静态,
+    因此带 24h 磁盘缓存:一天取一次、复用全天;限频/失败时回退旧缓存。
+    """
+    cached = _read_stock_basic_cache()
+    if cached is not None:
+        return cached
     if pro is None:
         return {}, {}
     try:
@@ -121,9 +169,16 @@ def _get_stock_basic_maps(pro) -> Tuple[Dict[str, str], Dict[str, str]]:
         )
         industry = {str(s): str(i or "") for s, i in zip(df["symbol"], df["industry"])}
         name = {str(s): str(n) for s, n in zip(df["symbol"], df["name"])}
+        _write_stock_basic_cache(industry, name)
+        logger.info(f"[Recommend] stock_basic 已刷新并缓存: {len(name)} 只")
         return industry, name
     except Exception as e:
         logger.warning(f"[Recommend] 获取 stock_basic 失败: {e}")
+        # 限频/失败时回退到过期缓存(若有),避免丢失行业/名称
+        stale = _read_stock_basic_cache(ignore_ttl=True)
+        if stale is not None:
+            logger.info("[Recommend] stock_basic 复用过期缓存兜底")
+            return stale
         return {}, {}
 
 
@@ -159,6 +214,70 @@ def _fetch_daily(pro, symbol: str, days: int = 30) -> Optional[pd.DataFrame]:
     except Exception as e:
         logger.debug(f"[Recommend] {symbol} Tushare daily 失败: {e}")
         return None
+
+
+def _get_recent_trade_dates(pro, n: int = 30) -> List[str]:
+    """取最近 n 个开市交易日(升序),用于全市场批量取数。
+
+    用一只始终交易的权重股(平安银行 000001.SZ)的日 K 反推交易日,
+    避免 Tushare trade_cal 接口的低频限制(部分套餐 1 次/小时)。
+    """
+    try:
+        end = datetime.now().strftime("%Y%m%d")
+        start = (datetime.now() - timedelta(days=n * 2 + 40)).strftime("%Y%m%d")
+        df = pro.daily(ts_code="000001.SZ", start_date=start, end_date=end)
+        if df is None or df.empty:
+            return []
+        dates = sorted(str(d) for d in df["trade_date"].dropna().tolist())
+        return dates[-n:]
+    except Exception as e:
+        logger.warning(f"[Recommend] 交易日列表获取失败: {e}")
+        return []
+
+
+def _build_all_a_panel(pro, dates: List[str], emit=None) -> Dict[str, pd.DataFrame]:
+    """按交易日批量拉全 A 股日 K(每日一次请求),返回 {6位代码: 评分用 DataFrame}。
+
+    相比逐只拉取(5000+ 次请求),这里 ~30 次请求即可覆盖全市场。
+    """
+    import time
+
+    frames: List[pd.DataFrame] = []
+    total = len(dates)
+    for i, d in enumerate(dates, 1):
+        if emit and (i % 5 == 0 or i == total):
+            emit("fetch", i, total, f"拉取全市场日K {i}/{total}")
+        try:
+            df = pro.daily(trade_date=d)
+            if df is not None and not df.empty:
+                frames.append(df)
+        except Exception as e:
+            logger.warning(f"[Recommend] daily(trade_date={d}) 失败: {e}")
+        time.sleep(0.12)  # 轻量限速,避免 Tushare 触发频控
+
+    if not frames:
+        return {}
+
+    big = pd.concat(frames, ignore_index=True)
+    big = big.rename(columns={"trade_date": "date", "vol": "volume"})
+    for col in ("close", "high", "volume", "pct_chg"):
+        big[col] = pd.to_numeric(big.get(col), errors="coerce")
+    big["code"] = big["ts_code"].astype(str).str.split(".").str[0]
+    big = big.sort_values(["code", "date"])
+
+    out: Dict[str, pd.DataFrame] = {}
+    for code, g in big.groupby("code", sort=False):
+        if len(g) < 20:  # 次新股/数据不足,跳过(与 _score_stock 的最小长度一致)
+            continue
+        g = g.reset_index(drop=True)
+        g["ma5"] = g["close"].rolling(5).mean()
+        g["ma10"] = g["close"].rolling(10).mean()
+        g["ma20"] = g["close"].rolling(20).mean()
+        vol_ma5 = g["volume"].rolling(5).mean()
+        g["volume_ratio"] = (g["volume"] / vol_ma5).round(2)
+        out[code] = g.tail(30).reset_index(drop=True)
+    logger.info(f"[Recommend] 全 A 股面板构建完成: {len(out)} 只(覆盖 {len(frames)}/{total} 个交易日)")
+    return out
 
 
 def _score_stock(df: pd.DataFrame) -> Optional[CandidateScore]:
@@ -393,10 +512,20 @@ def recommend(
 
     # 2. 候选池
     _emit("pool", 0, 0, "构建候选股池")
-    hs300 = _get_hs300_codes(pro) if pool in ("hs300", "both") else []
-    user_list = list(watchlist or []) if pool in ("watchlist", "both") else []
-    codes = _build_pool(pool, hs300, user_list)
-    pool_label = {"hs300": "HS300", "watchlist": "WATCHLIST", "both": "HS300 + WATCHLIST"}.get(pool, pool)
+    pool_norm = (pool or "hs300").lower()
+    all_a_panel: Optional[Dict[str, pd.DataFrame]] = None
+    if pool_norm == "all_a":
+        # 全 A 股:按交易日批量拉全市场,避免逐只 5000+ 次请求
+        _emit("fetch", 0, 0, "拉取全 A 股行情面板")
+        trade_dates = _get_recent_trade_dates(pro, 30)
+        all_a_panel = _build_all_a_panel(pro, trade_dates, _emit) if trade_dates else {}
+        codes = list(all_a_panel.keys())
+        pool_label = "ALL_A"
+    else:
+        hs300 = _get_hs300_codes(pro) if pool_norm in ("hs300", "both") else []
+        user_list = list(watchlist or []) if pool_norm in ("watchlist", "both") else []
+        codes = _build_pool(pool_norm, hs300, user_list)
+        pool_label = {"hs300": "HS300", "watchlist": "WATCHLIST", "both": "HS300 + WATCHLIST"}.get(pool_norm, pool_norm)
     if not codes:
         logger.warning("[Recommend] 候选池为空")
         _write_report(sector_names, [], pool_label, 0)
@@ -416,12 +545,14 @@ def recommend(
             _emit("score", i, total, f"评分中 {i}/{total}")
         if i % 50 == 0 or i == total:
             logger.info(f"[Recommend] 评分进度 {i}/{total}")
-        df = _fetch_daily(pro, code, days=30)
+        df = all_a_panel.get(code) if all_a_panel is not None else _fetch_daily(pro, code, days=30)
         cs = _score_stock(df)
         if cs is None:
             continue
         cs.code = code
-        cs.name = name_map.get(code, "") or _safe_get_name(manager, code)
+        # 名称只用本地映射(批量),不在循环里逐只联网取名——
+        # 全 A 股(5000+)逐只联网会拖到数小时。缺名的留到 Top N 再补。
+        cs.name = name_map.get(code, "")
         cs.industry = industry_map.get(code, "")
         matched = _match_sector(cs.industry, sector_names)
         if matched:
@@ -433,6 +564,11 @@ def recommend(
     candidates.sort(key=lambda c: c.score, reverse=True)
     top = candidates[:top_n]
     logger.info(f"[Recommend] 评分完成,有效候选 {len(candidates)},输出 Top {len(top)}")
+
+    # 仅对 Top N 补全缺失的股票名(联网兜底,N 次,代价可控)
+    for c in top:
+        if not c.name:
+            c.name = _safe_get_name(manager, c.code)
 
     # 5. 用实时报价覆盖 Top N 的现价/涨跌幅(评分用日 K,展示用实时;失败回退)
     price_as_of = _enrich_with_realtime(manager, top)
