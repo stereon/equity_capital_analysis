@@ -437,6 +437,93 @@ class SystemConfigService:
             "checks": checks,
         }
 
+    def get_feishu_stream_status(self) -> Dict[str, Any]:
+        """Return read-only Feishu Stream bot runtime status (no network call)."""
+        effective_map = self._build_setup_effective_config_map()
+
+        enabled = (
+            (effective_map.get("FEISHU_STREAM_ENABLED") or "false")
+            .strip()
+            .lower()
+            == "true"
+        )
+        app_id_configured = bool((effective_map.get("FEISHU_APP_ID") or "").strip())
+        app_secret_configured = bool((effective_map.get("FEISHU_APP_SECRET") or "").strip())
+
+        # lark-oapi SDK 是否可导入（Stream 模式依赖）
+        try:
+            import lark_oapi  # noqa: F401
+
+            sdk_available = True
+        except ImportError:
+            sdk_available = False
+
+        # 进程内单例是否在运行（与机器人同进程时准确，例如 main.py --serve）
+        running = False
+        try:
+            from bot.platforms import get_feishu_stream_client
+
+            client = get_feishu_stream_client()
+            running = bool(client and getattr(client, "is_running", False))
+        except Exception:  # pragma: no cover - 防御性：bot 模块缺失时不影响状态查询
+            running = False
+
+        if not enabled:
+            status, message = "disabled", "未启用：FEISHU_STREAM_ENABLED 为 false。"
+        elif not sdk_available:
+            status, message = "sdk_missing", "已启用但缺少 lark-oapi SDK，请运行 pip install lark-oapi。"
+        elif not (app_id_configured and app_secret_configured):
+            status, message = "missing_credentials", "已启用但缺少 FEISHU_APP_ID / FEISHU_APP_SECRET。"
+        elif running:
+            status, message = "running", "机器人长连接已在本进程运行。"
+        else:
+            status, message = (
+                "enabled_not_running",
+                "已启用且凭证完整，但当前进程未运行机器人——保存配置后需重启服务（python main.py --serve）。",
+            )
+
+        return {
+            "enabled": enabled,
+            "sdk_available": sdk_available,
+            "app_id_configured": app_id_configured,
+            "app_secret_configured": app_secret_configured,
+            "running": running,
+            "status": status,
+            "message": message,
+        }
+
+    def test_feishu_stream(self, timeout_seconds: float = 8.0) -> Dict[str, Any]:
+        """Validate saved Feishu app credentials by requesting a tenant_access_token."""
+        effective_map = self._build_setup_effective_config_map()
+        app_id = (effective_map.get("FEISHU_APP_ID") or "").strip()
+        app_secret = (effective_map.get("FEISHU_APP_SECRET") or "").strip()
+
+        if not app_id or not app_secret:
+            return {
+                "ok": False,
+                "message": "缺少 FEISHU_APP_ID / FEISHU_APP_SECRET，无法测试凭证。",
+            }
+
+        try:
+            import httpx
+
+            resp = httpx.post(
+                "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal",
+                json={"app_id": app_id, "app_secret": app_secret},
+                timeout=timeout_seconds,
+            )
+            data = resp.json()
+        except Exception as exc:  # 网络/解析失败均视为测试失败，不抛出
+            return {"ok": False, "message": f"请求飞书接口失败：{exc}"}
+
+        code = data.get("code")
+        if code == 0:
+            return {"ok": True, "message": "凭证有效：成功获取 tenant_access_token。"}
+        return {
+            "ok": False,
+            "message": f"凭证校验失败：code={code}, msg={data.get('msg')}",
+        }
+
     def export_env(self) -> Dict[str, Any]:
         """Return the raw active `.env` content for backup."""
         if self._manager.env_path.exists():

@@ -309,6 +309,8 @@ equity_capital_analysis/
 >
 > 说明：`FEISHU_APP_ID` / `FEISHU_APP_SECRET` 用于飞书应用、云文档或 Stream Bot 模式，不会直接启用群 Webhook 推送。只想收通知时，请优先配置 `FEISHU_WEBHOOK_URL`。
 
+> 扫码入口：在 Web 设置页「通知渠道」的 `FEISHU_APP_ID` 字段下方会展示一个二维码——已填 App ID 时为「飞书 App 扫码打开机器人会话」（AppLink，需飞书客户端 3.40+、应用已发布且用户在可见范围、并开启 `FEISHU_STREAM_ENABLED`）；未填 App ID 时为「前往飞书开放平台创建自建应用」引导。
+
 ### 搜索服务配置
 
 | 变量名 | 说明 | 必填 |

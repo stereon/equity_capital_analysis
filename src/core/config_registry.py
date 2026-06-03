@@ -1389,6 +1389,20 @@ _FIELD_DEFINITIONS: Dict[str, Dict[str, Any]] = {
         "validation": {},
         "display_order": 16,
     },
+    "FEISHU_STREAM_ENABLED": {
+        "title": "Feishu Stream Bot",
+        "description": "Enable the Feishu Stream (WebSocket long-connection) bot so users can chat with the bot directly — no public IP or webhook needed. Requires FEISHU_APP_ID / FEISHU_APP_SECRET and the lark-oapi SDK. Takes effect after restarting the service.",
+        "category": "notification",
+        "data_type": "boolean",
+        "ui_control": "switch",
+        "is_sensitive": False,
+        "is_required": False,
+        "is_editable": True,
+        "default_value": "false",
+        "options": [],
+        "validation": {},
+        "display_order": 17,
+    },
     # ------------------------------------------------------------------
     # Notification – Telegram
     # ------------------------------------------------------------------
@@ -3842,6 +3856,14 @@ _FIELD_HELP_METADATA: Dict[str, Dict[str, Any]] = {
         ],
         "docs": _DOC_FULL_GUIDE_NOTIFICATION,
         "warning_codes": ["secret_value", "not_webhook_delivery"],
+    },
+    "FEISHU_STREAM_ENABLED": {
+        "help_key": "settings.notification.FEISHU_WEBHOOK_URL",
+        "examples": [
+            "FEISHU_STREAM_ENABLED=true",
+        ],
+        "docs": _DOC_FULL_GUIDE_NOTIFICATION,
+        "warning_codes": ["restart_required"],
     },
     "TELEGRAM_MESSAGE_THREAD_ID": {
         "help_key": "settings.notification.telegram",

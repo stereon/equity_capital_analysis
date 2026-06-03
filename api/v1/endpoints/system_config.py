@@ -23,6 +23,8 @@ from api.v1.schemas.system_config import (
     TestLLMChannelResponse,
     TestNotificationChannelRequest,
     TestNotificationChannelResponse,
+    FeishuStreamStatusResponse,
+    TestFeishuStreamResponse,
     UpdateSystemConfigRequest,
     UpdateSystemConfigResponse,
     ValidateSystemConfigRequest,
@@ -433,6 +435,62 @@ def test_notification_channel(
             detail={
                 "error": "internal_error",
                 "message": "Failed to test notification channel",
+            },
+        )
+
+
+@router.get(
+    "/config/feishu/stream-status",
+    response_model=FeishuStreamStatusResponse,
+    responses={
+        200: {"description": "Feishu Stream bot status returned"},
+        500: {"description": "Internal server error", "model": ErrorResponse},
+    },
+    summary="Get Feishu Stream bot status",
+    description="Read-only Feishu Stream bot runtime status (enabled / credentials / running). No network call.",
+)
+def get_feishu_stream_status(
+    service: SystemConfigService = Depends(get_system_config_service),
+) -> FeishuStreamStatusResponse:
+    """Return the Feishu Stream bot runtime status."""
+    try:
+        payload = service.get_feishu_stream_status()
+        return FeishuStreamStatusResponse.model_validate(payload)
+    except Exception as exc:
+        logger.error("Failed to get Feishu Stream status: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "internal_error",
+                "message": "Failed to get Feishu Stream status",
+            },
+        )
+
+
+@router.post(
+    "/config/feishu/test-stream",
+    response_model=TestFeishuStreamResponse,
+    responses={
+        200: {"description": "Feishu credential test completed"},
+        500: {"description": "Internal server error", "model": ErrorResponse},
+    },
+    summary="Test Feishu app credentials",
+    description="Validate saved FEISHU_APP_ID / FEISHU_APP_SECRET by requesting a tenant_access_token.",
+)
+def test_feishu_stream(
+    service: SystemConfigService = Depends(get_system_config_service),
+) -> TestFeishuStreamResponse:
+    """Validate saved Feishu app credentials."""
+    try:
+        payload = service.test_feishu_stream()
+        return TestFeishuStreamResponse.model_validate(payload)
+    except Exception as exc:
+        logger.error("Failed to test Feishu credentials: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "internal_error",
+                "message": "Failed to test Feishu credentials",
             },
         )
 

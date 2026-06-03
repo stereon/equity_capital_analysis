@@ -274,6 +274,8 @@ For the notification baseline, diagnostics, and deployment notes, see [Notificat
 >
 > Note: `FEISHU_APP_ID` / `FEISHU_APP_SECRET` are for Feishu app mode, cloud documents, or Stream Bot mode. They do not enable group webhook notifications by themselves. For simple push notifications, use `FEISHU_WEBHOOK_URL` first.
 
+> QR entry: the Web Settings page shows a QR code under the `FEISHU_APP_ID` field in "Notification Channels" — when App ID is set it is an "open the bot chat in Feishu" AppLink (requires Feishu client 3.40+, a published app with the user in scope, and `FEISHU_STREAM_ENABLED`); when App ID is empty it is a "create a custom app on Feishu Open Platform" guide.
+
 ### Search Service Configuration
 
 | Variable | Description | Required |

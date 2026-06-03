@@ -307,3 +307,28 @@ class SystemConfigConflictResponse(BaseModel):
     error: str
     message: str
     current_config_version: str
+
+
+class FeishuStreamStatusResponse(BaseModel):
+    """Read-only runtime status of the Feishu Stream bot."""
+
+    enabled: bool
+    sdk_available: bool
+    app_id_configured: bool
+    app_secret_configured: bool
+    running: bool
+    status: Literal[
+        "disabled",
+        "sdk_missing",
+        "missing_credentials",
+        "enabled_not_running",
+        "running",
+    ]
+    message: str
+
+
+class TestFeishuStreamResponse(BaseModel):
+    """Result of validating saved Feishu app credentials."""
+
+    ok: bool
+    message: str

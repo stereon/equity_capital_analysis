@@ -28,6 +28,8 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
+import { FeishuBotQR } from '@/components/FeishuBotQR';
+import { FeishuStreamStatus } from '@/components/FeishuStreamStatus';
 
 const CATEGORY_LABEL: Record<string, string> = {
   base: '基础',
@@ -290,6 +292,8 @@ function FieldRow({
           ))}
         </div>
       )}
+      {schema.key === 'FEISHU_APP_ID' && <FeishuBotQR appId={displayValue} />}
+      {schema.key === 'FEISHU_STREAM_ENABLED' && <FeishuStreamStatus />}
     </div>
   );
 }
