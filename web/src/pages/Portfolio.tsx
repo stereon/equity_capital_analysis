@@ -6,7 +6,6 @@ import {
   LineChart as ChartIcon,
   TrendingUp,
   TrendingDown,
-  AlertTriangle,
   Clock,
   Plus,
   Loader2,
@@ -88,7 +87,6 @@ export default function Portfolio() {
       toast.success('交易已删除');
       qc.invalidateQueries({ queryKey: ['portfolio-snapshot'] });
       qc.invalidateQueries({ queryKey: ['portfolio-trades'] });
-      qc.invalidateQueries({ queryKey: ['portfolio-risk'] });
     },
     onError: (e: Error) => toast.error(`删除失败: ${e.message}`),
   });
@@ -98,13 +96,6 @@ export default function Portfolio() {
     queryFn: () =>
       api.portfolioSnapshot(accountId === ALL ? {} : { account_id: accountId }),
     // 0 = 不自动刷新;否则按用户在页面顶部选的间隔刷
-    refetchInterval: refreshMs > 0 ? refreshMs : false,
-  });
-
-  const riskQ = useQuery({
-    queryKey: ['portfolio-risk', accountId],
-    queryFn: () => api.portfolioRisk(accountId === ALL ? {} : { account_id: accountId }),
-    enabled: snapshotQ.isSuccess,
     refetchInterval: refreshMs > 0 ? refreshMs : false,
   });
 
@@ -119,7 +110,6 @@ export default function Portfolio() {
 
   const accounts = accountsQ.data?.accounts || [];
   const snapshot = snapshotQ.data;
-  const risk = riskQ.data;
   const positions = useMemo<PortfolioPosition[]>(() => {
     if (!snapshot) return [];
     return snapshot.accounts.flatMap((a) => a.positions);
@@ -146,7 +136,6 @@ export default function Portfolio() {
             }}
             onManualRefresh={() => {
               qc.invalidateQueries({ queryKey: ['portfolio-snapshot'] });
-              qc.invalidateQueries({ queryKey: ['portfolio-risk'] });
             }}
             isFetching={snapshotQ.isFetching}
           />
@@ -308,7 +297,7 @@ export default function Portfolio() {
         </CardContent>
       </Card>
 
-      {/* 风险摘要：原始 K/V dump 信息密度低，先隐藏；保留 riskQ 调用以便后续重写 */}
+      {/* 风险摘要：原始 K/V dump 信息密度低，已移除；后续重写时再接入 api.portfolioRisk */}
 
       {/* 近期交易 */}
       <Card>
@@ -425,7 +414,7 @@ function AccountForm({ onClose }: { onClose: () => void }) {
                     setBaseCurrency(m === 'cn' ? 'CNY' : m === 'hk' ? 'HKD' : 'USD');
                   }}
                 >
-                  {m === 'cn' ? 'A 股' : m === 'hk' ? '港股' : '美股'}
+                  {marketLabel(m)}
                 </Button>
               ))}
             </div>
@@ -480,7 +469,6 @@ function TradeForm({
       toast.success('交易已录入');
       qc.invalidateQueries({ queryKey: ['portfolio-snapshot'] });
       qc.invalidateQueries({ queryKey: ['portfolio-trades'] });
-      qc.invalidateQueries({ queryKey: ['portfolio-risk'] });
       onClose();
     },
     onError: (e: Error) => toast.error(`录入失败: ${e.message}`),
@@ -642,7 +630,6 @@ function CsvImportForm({
         toast.success(`导入完成:新增 ${r.inserted_count} / 跳过重复 ${r.duplicate_count} / 失败 ${r.failed_count}`);
         qc.invalidateQueries({ queryKey: ['portfolio-snapshot'] });
         qc.invalidateQueries({ queryKey: ['portfolio-trades'] });
-        qc.invalidateQueries({ queryKey: ['portfolio-risk'] });
         onClose();
       }
     },
@@ -876,17 +863,23 @@ function Mini({
   );
 }
 
+function marketLabel(market: string): string {
+  const m = market?.toLowerCase();
+  return m === 'cn' ? 'A 股' : m === 'hk' ? '港股' : m === 'us' ? '美股' : market;
+}
+
 function PositionRow({ p }: { p: PortfolioPosition }) {
   return (
     <TableRow>
-      <TableCell className="font-mono text-sm">
+      <TableCell className="text-sm">
         <a className="hover:underline" href={`/stock/${encodeURIComponent(p.symbol)}`}>
-          {p.symbol}
+          <span className="font-mono">{p.symbol}</span>
+          {p.name && <span className="text-muted-foreground ml-2">{p.name}</span>}
         </a>
       </TableCell>
       <TableCell>
         <Badge variant="secondary" className="text-[10px]">
-          {p.market}
+          {marketLabel(p.market)}
         </Badge>
       </TableCell>
       <TableCell className="text-right tabular-nums">{p.quantity.toLocaleString()}</TableCell>
@@ -942,27 +935,6 @@ function TradeRow({ t, onDelete }: { t: PortfolioTrade; onDelete: () => void }) 
   );
 }
 
-function RiskSection({ title, data }: { title: string; data: Record<string, unknown> }) {
-  const entries = Object.entries(data || {}).filter(([k]) => !k.startsWith('_'));
-  return (
-    <div className="rounded-md border p-3">
-      <div className="text-muted-foreground mb-2 text-xs font-medium">{title}</div>
-      {entries.length === 0 ? (
-        <div className="text-muted-foreground text-xs">无数据</div>
-      ) : (
-        <dl className="space-y-1 text-sm">
-          {entries.slice(0, 6).map(([k, v]) => (
-            <div key={k} className="flex justify-between gap-3">
-              <dt className="text-muted-foreground truncate">{k}</dt>
-              <dd className="font-medium tabular-nums">{formatRiskValue(v)}</dd>
-            </div>
-          ))}
-        </dl>
-      )}
-    </div>
-  );
-}
-
 function EmptyBox({ icon: Icon, text }: { icon: typeof Briefcase; text: string }) {
   return (
     <div className="text-muted-foreground flex flex-col items-center gap-2 py-8 text-sm">
@@ -986,17 +958,3 @@ function formatAmount(v: number): string {
   return v.toFixed(2);
 }
 
-function formatRiskValue(v: unknown): string {
-  if (v == null) return '—';
-  if (typeof v === 'number') {
-    if (Math.abs(v) < 1 && Math.abs(v) > 0) return (v * 100).toFixed(2) + '%';
-    return v.toLocaleString(undefined, { maximumFractionDigits: 2 });
-  }
-  if (typeof v === 'string') return v;
-  if (Array.isArray(v)) return `${v.length} 项`;
-  if (typeof v === 'object') {
-    const keys = Object.keys(v as object);
-    return keys.length > 0 ? `{${keys.length}}` : '—';
-  }
-  return String(v);
-}

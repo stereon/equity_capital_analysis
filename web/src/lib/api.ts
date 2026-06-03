@@ -432,6 +432,12 @@ export const api = {
       `/system/config/notification/test-channel`,
       { method: 'POST', body: JSON.stringify({ channel }) },
     ),
+  feishuStreamStatus: () =>
+    request<FeishuStreamStatus>(`/system/config/feishu/stream-status`),
+  feishuTestStream: () =>
+    request<{ ok: boolean; message: string }>(`/system/config/feishu/test-stream`, {
+      method: 'POST',
+    }),
 
   // 行情 ============
   stockQuote: (code: string) => request<StockQuote>(`/stocks/${encodeURIComponent(code)}/quote`),
@@ -519,6 +525,7 @@ export interface PortfolioAccount {
 
 export interface PortfolioPosition {
   symbol: string;
+  name?: string | null;
   market: string;
   currency: string;
   quantity: number;
@@ -845,6 +852,21 @@ export interface SystemConfigSetupStatus {
   required_missing_keys: string[];
   next_step_key?: string | null;
   checks: SystemConfigSetupCheck[];
+}
+
+export interface FeishuStreamStatus {
+  enabled: boolean;
+  sdk_available: boolean;
+  app_id_configured: boolean;
+  app_secret_configured: boolean;
+  running: boolean;
+  status:
+    | 'disabled'
+    | 'sdk_missing'
+    | 'missing_credentials'
+    | 'enabled_not_running'
+    | 'running';
+  message: string;
 }
 
 // === Stock quote / history ===

@@ -78,6 +78,7 @@ class _ResolvedPositionPrice:
     is_stale: bool
     is_available: bool
     provider: Optional[str] = None
+    name: Optional[str] = None
 
 
 class PortfolioService:
@@ -1025,9 +1026,12 @@ class PortfolioService:
             if abs(cost_base) > EPS:
                 unrealized_pct = unrealized_base / cost_base * 100.0
 
+            name = price_info.name or self._resolve_position_name(symbol)
+
             position_rows.append(
                 {
                     "symbol": symbol,
+                    "name": name,
                     "market": market,
                     "currency": currency,
                     "quantity": round(qty, 8),
@@ -1055,7 +1059,7 @@ class PortfolioService:
         today = date.today()
 
         if as_of_date == today:
-            realtime_price, provider = self._fetch_realtime_position_price(symbol)
+            realtime_price, provider, name = self._fetch_realtime_position_price(symbol)
             if realtime_price is not None and realtime_price > 0:
                 return _ResolvedPositionPrice(
                     price=float(realtime_price),
@@ -1064,6 +1068,7 @@ class PortfolioService:
                     is_stale=False,
                     is_available=True,
                     provider=provider,
+                    name=name,
                 )
 
         close = self.repo.get_latest_close_with_date(symbol=symbol, as_of=as_of_date)
@@ -1087,30 +1092,46 @@ class PortfolioService:
         )
 
     @staticmethod
-    def _fetch_realtime_position_price(symbol: str) -> Tuple[Optional[float], Optional[str]]:
+    def _fetch_realtime_position_price(
+        symbol: str,
+    ) -> Tuple[Optional[float], Optional[str], Optional[str]]:
         try:
             from data_provider.base import DataFetcherManager
+            from src.data.stock_mapping import is_meaningful_stock_name
 
             quote = DataFetcherManager().get_realtime_quote(symbol, log_final_failure=False)
         except Exception as exc:
             logger.warning("Failed to fetch realtime portfolio price for %s: %s", symbol, exc)
-            return None, None
+            return None, None, None
 
         if quote is None:
-            return None, None
+            return None, None, None
 
         price = getattr(quote, "price", None)
         try:
             numeric_price = float(price)
         except (TypeError, ValueError):
-            return None, None
+            return None, None, None
 
         if numeric_price <= 0:
-            return None, None
+            return None, None, None
 
         source = getattr(quote, "source", None)
         provider = getattr(source, "value", None) or (str(source) if source is not None else None)
-        return numeric_price, provider
+        quote_name = getattr(quote, "name", None)
+        name = quote_name if is_meaningful_stock_name(quote_name, symbol) else None
+        return numeric_price, provider, name
+
+    @staticmethod
+    def _resolve_position_name(symbol: str) -> Optional[str]:
+        """Lightweight stock-name lookup (local maps / index, no extra realtime call)."""
+        try:
+            from data_provider.base import DataFetcherManager
+
+            return DataFetcherManager().get_stock_name(symbol, allow_realtime=False)
+        except Exception as exc:
+            logger.debug("Failed to resolve stock name for %s: %s", symbol, exc)
+            return None
 
     @staticmethod
     def _normalize_symbol_for_storage(symbol: str) -> str:
