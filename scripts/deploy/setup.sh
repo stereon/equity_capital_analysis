@@ -13,12 +13,14 @@
 #   APP_DIR(默认 /opt/equilytic) APP_USER(默认当前用户) PORT(默认 8000)
 #   USE_LOCAL_CLAUDE(默认 1，=0 表示用远程 LLM key、不装 shim)
 #   CLAUDE_BIN(默认自动探测 `which claude`)
+#   PYTHON_BIN(默认自动解析：优先 3.11，缺失时回退系统 python3 >= 3.11)
 set -euo pipefail
 
 APP_DIR="${APP_DIR:-/opt/equilytic}"
 APP_USER="${APP_USER:-$(id -un)}"
 PORT="${PORT:-8000}"
 USE_LOCAL_CLAUDE="${USE_LOCAL_CLAUDE:-1}"
+PYTHON_BIN="${PYTHON_BIN:-}"
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 log() { printf '\n\033[1;32m==> %s\033[0m\n' "$*"; }
@@ -29,7 +31,49 @@ log "目标：APP_DIR=$APP_DIR  APP_USER=$APP_USER  PORT=$PORT  本地Claude=$US
 # 1. 系统依赖
 log "安装系统依赖（apt）"
 sudo apt-get update -y
-sudo apt-get install -y python3.11 python3.11-venv python3-pip git curl wkhtmltopdf
+sudo apt-get install -y python3-pip git curl wkhtmltopdf
+
+# 1b. 解析 Python 解释器
+#   项目目标为 3.11（Docker 基镜像与 CI 均用 3.11）。
+#   默认源缺少 3.11 时（如 Ubuntu 24.04 Noble 只有 3.12），依次尝试 deadsnakes，
+#   仍不可得则回退系统 python3（要求 >= 3.11），可用 PYTHON_BIN= 显式指定。
+py_ver_ok() {  # <bin>：存在且版本 >= 3.11
+  command -v "$1" >/dev/null 2>&1 \
+    && "$1" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)' >/dev/null 2>&1
+}
+ensure_venv_pkg() {  # 为给定解释器安装匹配的 venv 包（best-effort，已自带则跳过）
+  "$1" -c 'import venv' >/dev/null 2>&1 && return 0
+  local v; v="$("$1" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+  sudo apt-get install -y "python${v}-venv" >/dev/null 2>&1 || true
+}
+
+if [ -z "$PYTHON_BIN" ]; then
+  if py_ver_ok python3.11; then
+    PYTHON_BIN=python3.11
+  else
+    # 先试默认源；不在源里（Noble）会失败，吞掉错误后再试 deadsnakes
+    sudo apt-get install -y python3.11 python3.11-venv >/dev/null 2>&1 || true
+    if ! py_ver_ok python3.11; then
+      sudo apt-get install -y software-properties-common >/dev/null 2>&1 || true
+      if command -v add-apt-repository >/dev/null 2>&1; then
+        sudo add-apt-repository -y ppa:deadsnakes/ppa >/dev/null 2>&1 \
+          && sudo apt-get update -y >/dev/null 2>&1 \
+          && sudo apt-get install -y python3.11 python3.11-venv >/dev/null 2>&1 || true
+      fi
+    fi
+    if py_ver_ok python3.11; then
+      PYTHON_BIN=python3.11
+    elif py_ver_ok python3; then
+      PYTHON_BIN=python3
+      warn "未找到 python3.11，回退到系统 $(python3 --version 2>&1)；项目目标为 3.11，请自行确认依赖兼容性。"
+    else
+      echo "ERROR: 需要 Python >= 3.11，未找到可用解释器；请手动安装后用 PYTHON_BIN= 指定。" >&2
+      exit 1
+    fi
+  fi
+fi
+ensure_venv_pkg "$PYTHON_BIN"
+log "使用 Python：$("$PYTHON_BIN" --version 2>&1)（$PYTHON_BIN）"
 
 # 2. bun（前端构建）
 if ! command -v bun >/dev/null 2>&1; then
@@ -64,7 +108,7 @@ cd "$APP_DIR"
 
 # 5. Python venv + 依赖
 log "创建 venv 并安装 Python 依赖"
-[ -d .venv ] || python3.11 -m venv .venv
+[ -d .venv ] || "$PYTHON_BIN" -m venv .venv
 .venv/bin/pip install -U pip
 .venv/bin/pip install -r requirements.txt
 

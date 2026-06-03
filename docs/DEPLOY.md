@@ -146,7 +146,7 @@ python main.py --serve
 
 > ⚡ **一键脚本**：仓库提供 `scripts/deploy/setup.sh`，自动完成装依赖 / 建 venv / 构建前端 / 安装并启用 systemd 服务。`git clone` 后执行：
 > ```bash
-> APP_USER=$USER bash scripts/deploy/setup.sh    # 可用 APP_DIR / PORT / USE_LOCAL_CLAUDE 覆盖默认值
+> APP_USER=$USER bash scripts/deploy/setup.sh    # 可用 APP_DIR / PORT / USE_LOCAL_CLAUDE / PYTHON_BIN 覆盖默认值
 > ```
 > 脚本无法代办的三件事（写 `.env`、`claude login`、云安全组放行端口）会在结束时再提示一遍。下面是等价的手动步骤。
 
@@ -157,7 +157,10 @@ python main.py --serve
 
 ```bash
 sudo apt update
-sudo apt install -y python3.11 python3.11-venv git curl wkhtmltopdf
+sudo apt install -y python3-pip git curl wkhtmltopdf
+# 项目目标 Python 3.11；Ubuntu 24.04(Noble) 默认源无 3.11，可用 deadsnakes 安装：
+#   sudo add-apt-repository -y ppa:deadsnakes/ppa && sudo apt update && sudo apt install -y python3.11 python3.11-venv
+# 或直接用系统 python3(>=3.11)：将下方 python3.11 换成 python3
 # 前端构建（后端默认托管 web/dist）
 curl -fsSL https://bun.sh/install | bash && source ~/.bashrc
 
