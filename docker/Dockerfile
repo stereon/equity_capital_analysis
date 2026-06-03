@@ -3,15 +3,15 @@
 # ===================================
 # 多阶段构建：前端打包 + 后端运行
 
-FROM node:20-slim AS web-builder
+FROM oven/bun:1 AS web-builder
 
-WORKDIR /app/apps/dsa-web
+WORKDIR /app/web
 
-COPY apps/dsa-web/package.json apps/dsa-web/package-lock.json ./
-RUN npm ci
+COPY web/package.json web/bun.lock ./
+RUN bun install --frozen-lockfile
 
-COPY apps/dsa-web/ ./
-RUN npm run build
+COPY web/ ./
+RUN bun run build
 
 # Pin to bookworm: wkhtmltopdf was removed from Debian testing (2025)
 FROM python:3.11-slim-bookworm
@@ -52,7 +52,8 @@ COPY data_provider/ ./data_provider/
 COPY bot/ ./bot/
 COPY src/ ./src/
 COPY strategies/ ./strategies/
-COPY --from=web-builder /app/static ./static/
+# 后端默认托管 Vite 产物 web/dist（见 api/app.py create_app 的 static_dir 默认值）
+COPY --from=web-builder /app/web/dist ./web/dist/
 COPY docker/entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 
 # 确保数据目录存在并授权给 non-root 用户

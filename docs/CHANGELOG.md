@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 <!-- 新条目格式：- [类型] 描述（类型取值：新功能/改进/修复/文档/测试/chore）-->
 <!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->
+- [新功能] Web 设置页飞书区块在 `FEISHU_APP_ID` 字段下新增机器人扫码入口：已配置 App ID 时展示「飞书 App 扫码打开机器人会话」二维码（AppLink，飞书 3.40+）与复制链接；未配置时展示「前往飞书开放平台创建自建应用」引导。纯前端实现，不改后端 / schema / 机器人逻辑。
+- [改进] `FEISHU_STREAM_ENABLED` 注册为 Web 设置页可编辑布尔开关（notification 分类，标记 `restart_required`），无需再手改 `.env` 即可开启飞书 Stream 机器人。
+- [新功能] 新增飞书 Stream 机器人状态接口 `GET /api/v1/system/config/feishu/stream-status`（只读：启用/凭证/运行状态）与凭证测试接口 `POST /api/v1/system/config/feishu/test-stream`（校验 App ID/Secret）；设置页在 `FEISHU_STREAM_ENABLED` 下展示连接状态徽标与「测试凭证」按钮。
 - [文档] 新增 `docs/data-sources-setup.md`，覆盖 .env 必需 / 可选数据源开关、雪球 cookie 获取与续期、时效窗口与 fundamental fetch 预算调优；README 加链接指向该文档。
 - [新功能] `DATA_SOURCE_DISABLE_EFINANCE` env 开关：阻断 push2.eastmoney 网络环境下跳过 efinance fetcher，避免 ERROR 噪音和 4 次 retry 雪崩。
 - [新功能] `CNINFO_DISCLOSURE_ENABLED` env 开关：启用巨潮资讯网公告搜索作为 SearchService 兜底（直连 hisAnnouncement HTTP，A 股 6 位代码自动触发）。
@@ -61,6 +64,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [改进] P2-min：LLM Prompt 注入市场阶段上下文。
 - [修复] 问股 single-agent 新增 provider-aware trace 分轨，跨轮保留 DeepSeek V4 thinking + tool-call 的 `reasoning_content` 与工具协议材料。
 - [chore] 新增本地实验用 Codex OpenAI-compatible shim 脚本与使用说明，便于通过 `codex exec` 试跑纯文本分析链路。
+- [改进] Web 持仓明细：代码后展示股票中文/英文名称（后端快照接口 `PortfolioPositionItem` 追加 `name` 字段，从已取实时行情白拿、缺名走本地映射兜底），市场列由 `cn/hk/us` 改为「A 股 / 港股 / 美股」。
+- [改进] 飞书机器人命令解析容错开头的项目符号/列表标记（`•·●*-` 等），避免直接复制 `/help` 里的 `• /batch` 无法识别。
+- [修复] 飞书机器人在群里 @ 其他机器人时也会抢答：`mentioned` 改为按本机器人 open_id（`/open-apis/bot/v3/info`）精确匹配 mentions，仅 @ 自己才响应。
+- [新功能] 飞书机器人处理消息期间给来源消息加「思考中」表情回应（`THINKING`，出结果后撤回），可用 `FEISHU_THINKING_EMOJI` 覆盖；并注册空 reaction 事件 handler 消除 SDK `processor not found` 噪音。
+- [新功能] 飞书机器人 `AGENT_MODE` + `AGENT_NL_ROUTING` 下，非命令的 @/私聊消息回退到 `/chat` Agent 对答；自然语言路由新增 `recommend`/`market`/`research`/`batch` 意图（含数量解析），"帮我推荐三只股票""复盘大盘""深度研究X""批量分析自选股"等可直接触发对应命令。
+- [新功能] 新增 `/recommend`（别名 荐股/推荐/选股）全 A 股技术选股：`recommendation_service` 增加 `all_a` 池，按交易日批量取全市场（绕开 trade_cal/stock_basic 限频，stock_basic 加 24h 磁盘缓存），复用现有评分口径排序；命令异步执行先回执后推送，并对 Top 3 叠加全部策略 skill 跑完整 AI 分析二次推送。
+- [文档] `docs/DEPLOY.md` Systemd 方案更新为「Claude shim + 主服务」双 unit 流程并补登录/端口说明；新增 `scripts/deploy/*.service` 模板；修复 `docker/Dockerfile` 前端构建阶段（`apps/dsa-web`→`web/`，bun 构建并托管 `web/dist`）。
 
 ## [3.18.0] - 2026-05-21
 

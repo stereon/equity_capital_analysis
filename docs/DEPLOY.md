@@ -142,53 +142,67 @@ python main.py --serve
 
 ---
 
-## 🔧 方案三：Systemd 服务
+## 🔧 方案三：Systemd 服务（Web 服务 + 飞书机器人，推荐用于长期运行）
 
-创建 systemd 服务文件实现开机自启和自动重启：
+仓库已提供两份服务模板：`scripts/deploy/claude-shim.service`、`scripts/deploy/stock-analyzer.service`。
+下面以 Ubuntu、代码放在 `/opt/stock-analyzer`、运行账号 `ubuntu`、端口 `8000` 为例。
 
-### 1. 创建服务文件
-
-```bash
-sudo vim /etc/systemd/system/stock-analyzer.service
-```
-
-内容：
-```ini
-[Unit]
-Description=A股自选股智能分析系统
-After=network.target
-
-[Service]
-Type=simple
-User=root
-WorkingDirectory=/opt/stock-analyzer
-Environment="PATH=/opt/stock-analyzer/venv/bin"
-ExecStart=/opt/stock-analyzer/venv/bin/python main.py --schedule
-Restart=always
-RestartSec=30
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### 2. 启动服务
+### 前置：装依赖 + 构建前端
 
 ```bash
-# 重载配置
+sudo apt update
+sudo apt install -y python3.11 python3.11-venv git curl wkhtmltopdf
+# 前端构建（后端默认托管 web/dist）
+curl -fsSL https://bun.sh/install | bash && source ~/.bashrc
+
+cd /opt/stock-analyzer
+python3.11 -m venv .venv
+.venv/bin/pip install -U pip && .venv/bin/pip install -r requirements.txt
+cd web && bun install && bun run build && cd ..   # 产物 web/dist
+```
+
+`.env` 放在 `/opt/stock-analyzer/.env`（由程序 `load_dotenv()` 读取，不进 git）。
+
+### LLM：用本地 Claude（可选）
+
+仅当 `LLM` 走本地 Claude shim 时才需要 `claude-shim.service`。前置是**以运行账号登录 claude CLI**：
+
+```bash
+sudo npm i -g @anthropic-ai/claude-code      # 需先装 Node 20+
+claude login                                  # 订阅登录；或 export ANTHROPIC_API_KEY=...
+which claude                                  # 记下绝对路径，填进 claude-shim.service
+sudo -u ubuntu /usr/bin/claude -p "ping" --output-format text   # 验证认证 OK
+```
+
+> ⚠️ `claude login` 必须用 **systemd 运行账号（这里是 ubuntu）** 执行，凭证存在该账号家目录；用 root 登录会读不到。
+> 若改用远程 LLM key（DeepSeek / OpenAI / Qwen 等），可不部署 shim，并删掉 `stock-analyzer.service` 里对 `claude-shim` 的 `Requires/After`。
+
+### 1. 安装服务文件
+
+```bash
+sudo cp scripts/deploy/claude-shim.service     /etc/systemd/system/   # 用本地 Claude 时
+sudo cp scripts/deploy/stock-analyzer.service  /etc/systemd/system/
+# 按需用 sudoedit 改 User / WorkingDirectory / 端口 / claude 绝对路径
+```
+
+### 2. 启动并开机自启
+
+```bash
 sudo systemctl daemon-reload
-
-# 启动服务
-sudo systemctl start stock-analyzer
-
-# 开机自启
-sudo systemctl enable stock-analyzer
-
-# 查看状态
-sudo systemctl status stock-analyzer
-
-# 查看日志
-journalctl -u stock-analyzer -f
+sudo systemctl enable --now claude-shim stock-analyzer   # 不用本地 Claude 则只起 stock-analyzer
+sudo systemctl status stock-analyzer --no-pager
+journalctl -u stock-analyzer -f       # 看到 [Feishu Stream] 客户端已启动 即正常
 ```
+
+### 3. 验证 + 放行端口
+
+```bash
+curl -s http://127.0.0.1:8000/api/health    # {"status":"ok"}
+```
+
+在云厂商**安全组**放行入站 `TCP 8000`（来源建议限定你的 IP），即可用 `http://<公网IP>:8000` 访问。
+
+> 飞书机器人是出站长连接，无需公网 IP/域名；但**不要本地与服务器同时连同一个飞书 app**（长连接集群模式会随机分发消息，导致"有时不回"）。
 
 ---
 
