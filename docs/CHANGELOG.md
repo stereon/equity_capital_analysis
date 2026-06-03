@@ -71,6 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [新功能] 飞书机器人 `AGENT_MODE` + `AGENT_NL_ROUTING` 下，非命令的 @/私聊消息回退到 `/chat` Agent 对答；自然语言路由新增 `recommend`/`market`/`research`/`batch` 意图（含数量解析），"帮我推荐三只股票""复盘大盘""深度研究X""批量分析自选股"等可直接触发对应命令。
 - [新功能] 新增 `/recommend`（别名 荐股/推荐/选股）全 A 股技术选股：`recommendation_service` 增加 `all_a` 池，按交易日批量取全市场（绕开 trade_cal/stock_basic 限频，stock_basic 加 24h 磁盘缓存），复用现有评分口径排序；命令异步执行先回执后推送，并对 Top 3 叠加全部策略 skill 跑完整 AI 分析二次推送。
 - [文档] `docs/DEPLOY.md` Systemd 方案更新为「Claude shim + 主服务」双 unit 流程并补登录/端口说明；新增 `scripts/deploy/*.service` 模板；修复 `docker/Dockerfile` 前端构建阶段（`apps/dsa-web`→`web/`，bun 构建并托管 `web/dist`）。
+- [chore] 新增一键部署脚本 `scripts/deploy/setup.sh`（装依赖/建 venv/构建前端/安装启用 systemd，参数化 APP_DIR/USER/PORT/本地Claude）；systemd 服务与容器命名由 `stock-analyzer` 统一改为 `equilytic`（服务 `equilytic` / `equilytic-shim`，安装目录 `/opt/equilytic`）。
 
 ## [3.18.0] - 2026-05-21
 

@@ -1,22 +1,22 @@
-# 本地 Claude Code -> OpenAI 兼容端点 shim（LLM 通道，仅在用本地 Claude 时需要）
-# 部署：拷到 /etc/systemd/system/claude-shim.service，按需改 User / 路径 / claude 绝对路径
+# Equilytic LLM shim：本地 Claude Code -> OpenAI 兼容端点（仅在用本地 Claude 时需要）
+# 部署：拷到 /etc/systemd/system/equilytic-shim.service，按需改 User / 路径 / claude 绝对路径
 #
 # 前置：以运行账号（下方 User）登录 claude CLI（claude login 或 ANTHROPIC_API_KEY）。
 # 验证：sudo -u <User> /usr/bin/claude -p "ping" --output-format text 能出文字即可。
 [Unit]
-Description=Claude OpenAI Shim (LLM channel for stock-analyzer)
+Description=Equilytic LLM shim (local Claude -> OpenAI endpoint)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
 User=ubuntu
-WorkingDirectory=/opt/stock-analyzer
+WorkingDirectory=/opt/equilytic
 # systemd 环境 PATH 精简，claude 必须用绝对路径（用 `which claude` 的真实结果）
 Environment=CLAUDE_SHIM_CLAUDE_BIN=/usr/bin/claude
 # 若用 API key 而非订阅登录，解开下一行并填入 key：
 # Environment=ANTHROPIC_API_KEY=sk-ant-xxxxx
-ExecStart=/opt/stock-analyzer/.venv/bin/python scripts/claude_openai_shim.py --host 127.0.0.1 --port 8766
+ExecStart=/opt/equilytic/.venv/bin/python scripts/claude_openai_shim.py --host 127.0.0.1 --port 8766
 Restart=always
 RestartSec=5
 

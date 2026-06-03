@@ -34,8 +34,8 @@ sudo systemctl enable docker
 
 ```bash
 # 克隆代码（或上传代码到服务器）
-git clone <your-repo-url> /opt/stock-analyzer
-cd /opt/stock-analyzer
+git clone <your-repo-url> /opt/equilytic
+cd /opt/equilytic
 
 # 复制并编辑配置文件
 cp .env.example .env
@@ -72,10 +72,10 @@ docker-compose -f ./docker/docker-compose.yml build --no-cache
 docker-compose -f ./docker/docker-compose.yml up -d
 
 # 进入容器调试
-docker-compose -f ./docker/docker-compose.yml exec -u dsa stock-analyzer bash
+docker-compose -f ./docker/docker-compose.yml exec -u dsa equilytic bash
 
 # 手动执行一次分析
-docker-compose -f ./docker/docker-compose.yml exec -u dsa stock-analyzer python main.py --no-notify
+docker-compose -f ./docker/docker-compose.yml exec -u dsa equilytic python main.py --no-notify
 ```
 
 ### 5. 数据持久化
@@ -103,14 +103,14 @@ sudo apt update
 sudo apt install -y python3.10 python3.10-venv python3-pip
 
 # 创建虚拟环境
-python3.10 -m venv /opt/stock-analyzer/venv
-source /opt/stock-analyzer/venv/bin/activate
+python3.10 -m venv /opt/equilytic/venv
+source /opt/equilytic/venv/bin/activate
 ```
 
 ### 2. 安装依赖
 
 ```bash
-cd /opt/stock-analyzer
+cd /opt/equilytic
 pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
@@ -144,8 +144,14 @@ python main.py --serve
 
 ## 🔧 方案三：Systemd 服务（Web 服务 + 飞书机器人，推荐用于长期运行）
 
-仓库已提供两份服务模板：`scripts/deploy/claude-shim.service`、`scripts/deploy/stock-analyzer.service`。
-下面以 Ubuntu、代码放在 `/opt/stock-analyzer`、运行账号 `ubuntu`、端口 `8000` 为例。
+> ⚡ **一键脚本**：仓库提供 `scripts/deploy/setup.sh`，自动完成装依赖 / 建 venv / 构建前端 / 安装并启用 systemd 服务。`git clone` 后执行：
+> ```bash
+> APP_USER=$USER bash scripts/deploy/setup.sh    # 可用 APP_DIR / PORT / USE_LOCAL_CLAUDE 覆盖默认值
+> ```
+> 脚本无法代办的三件事（写 `.env`、`claude login`、云安全组放行端口）会在结束时再提示一遍。下面是等价的手动步骤。
+
+仓库已提供两份服务模板：`scripts/deploy/equilytic-shim.service`、`scripts/deploy/equilytic.service`。
+下面以 Ubuntu、代码放在 `/opt/equilytic`、运行账号 `ubuntu`、端口 `8000` 为例。
 
 ### 前置：装依赖 + 构建前端
 
@@ -155,33 +161,33 @@ sudo apt install -y python3.11 python3.11-venv git curl wkhtmltopdf
 # 前端构建（后端默认托管 web/dist）
 curl -fsSL https://bun.sh/install | bash && source ~/.bashrc
 
-cd /opt/stock-analyzer
+cd /opt/equilytic
 python3.11 -m venv .venv
 .venv/bin/pip install -U pip && .venv/bin/pip install -r requirements.txt
 cd web && bun install && bun run build && cd ..   # 产物 web/dist
 ```
 
-`.env` 放在 `/opt/stock-analyzer/.env`（由程序 `load_dotenv()` 读取，不进 git）。
+`.env` 放在 `/opt/equilytic/.env`（由程序 `load_dotenv()` 读取，不进 git）。
 
 ### LLM：用本地 Claude（可选）
 
-仅当 `LLM` 走本地 Claude shim 时才需要 `claude-shim.service`。前置是**以运行账号登录 claude CLI**：
+仅当 `LLM` 走本地 Claude shim 时才需要 `equilytic-shim.service`。前置是**以运行账号登录 claude CLI**：
 
 ```bash
 sudo npm i -g @anthropic-ai/claude-code      # 需先装 Node 20+
 claude login                                  # 订阅登录；或 export ANTHROPIC_API_KEY=...
-which claude                                  # 记下绝对路径，填进 claude-shim.service
+which claude                                  # 记下绝对路径，填进 equilytic-shim.service
 sudo -u ubuntu /usr/bin/claude -p "ping" --output-format text   # 验证认证 OK
 ```
 
 > ⚠️ `claude login` 必须用 **systemd 运行账号（这里是 ubuntu）** 执行，凭证存在该账号家目录；用 root 登录会读不到。
-> 若改用远程 LLM key（DeepSeek / OpenAI / Qwen 等），可不部署 shim，并删掉 `stock-analyzer.service` 里对 `claude-shim` 的 `Requires/After`。
+> 若改用远程 LLM key（DeepSeek / OpenAI / Qwen 等），可不部署 shim，并删掉 `equilytic.service` 里对 `equilytic-shim` 的 `Requires/After`。
 
 ### 1. 安装服务文件
 
 ```bash
-sudo cp scripts/deploy/claude-shim.service     /etc/systemd/system/   # 用本地 Claude 时
-sudo cp scripts/deploy/stock-analyzer.service  /etc/systemd/system/
+sudo cp scripts/deploy/equilytic-shim.service     /etc/systemd/system/   # 用本地 Claude 时
+sudo cp scripts/deploy/equilytic.service  /etc/systemd/system/
 # 按需用 sudoedit 改 User / WorkingDirectory / 端口 / claude 绝对路径
 ```
 
@@ -189,9 +195,9 @@ sudo cp scripts/deploy/stock-analyzer.service  /etc/systemd/system/
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now claude-shim stock-analyzer   # 不用本地 Claude 则只起 stock-analyzer
-sudo systemctl status stock-analyzer --no-pager
-journalctl -u stock-analyzer -f       # 看到 [Feishu Stream] 客户端已启动 即正常
+sudo systemctl enable --now equilytic-shim equilytic   # 不用本地 Claude 则只起 equilytic
+sudo systemctl status equilytic --no-pager
+journalctl -u equilytic -f       # 看到 [Feishu Stream] 客户端已启动 即正常
 ```
 
 ### 3. 验证 + 放行端口
@@ -263,7 +269,7 @@ os.environ["https_proxy"] = "http://your-proxy:port"
 docker-compose -f ./docker/docker-compose.yml logs -f --tail=100
 
 # 直接部署
-tail -f /opt/stock-analyzer/logs/stock_analysis_*.log
+tail -f /opt/equilytic/logs/stock_analysis_*.log
 ```
 
 ### 健康检查
@@ -273,17 +279,17 @@ tail -f /opt/stock-analyzer/logs/stock_analysis_*.log
 ps aux | grep main.py
 
 # 检查最近的报告
-ls -la /opt/stock-analyzer/reports/
+ls -la /opt/equilytic/reports/
 ```
 
 ### 定期维护
 
 ```bash
 # 清理旧日志（保留7天）
-find /opt/stock-analyzer/logs -mtime +7 -delete
+find /opt/equilytic/logs -mtime +7 -delete
 
 # 清理旧报告（保留30天）
-find /opt/stock-analyzer/reports -mtime +30 -delete
+find /opt/equilytic/reports -mtime +30 -delete
 ```
 
 ---
@@ -305,7 +311,7 @@ docker-compose -f ./docker/docker-compose.yml build --no-cache
 
 ```bash
 # 停止服务后删除 lock 文件
-rm /opt/stock-analyzer/data/*.lock
+rm /opt/equilytic/data/*.lock
 ```
 
 ### 4. 内存不足
@@ -326,14 +332,14 @@ deploy:
 
 ```bash
 # 源服务器：打包
-cd /opt/stock-analyzer
-tar -czvf stock-analyzer-backup.tar.gz .env data/ logs/ reports/
+cd /opt/equilytic
+tar -czvf equilytic-backup.tar.gz .env data/ logs/ reports/
 
 # 目标服务器：部署
-mkdir -p /opt/stock-analyzer
-cd /opt/stock-analyzer
+mkdir -p /opt/equilytic
+cd /opt/equilytic
 git clone <your-repo-url> .
-tar -xzvf stock-analyzer-backup.tar.gz
+tar -xzvf equilytic-backup.tar.gz
 docker-compose -f ./docker/docker-compose.yml up -d
 ```
 

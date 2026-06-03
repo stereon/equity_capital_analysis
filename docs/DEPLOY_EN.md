@@ -34,8 +34,8 @@ sudo systemctl enable docker
 
 ```bash
 # Clone code (or upload code to server)
-git clone <your-repo-url> /opt/stock-analyzer
-cd /opt/stock-analyzer
+git clone <your-repo-url> /opt/equilytic
+cd /opt/equilytic
 
 # Copy and edit configuration file
 cp .env.example .env
@@ -70,10 +70,10 @@ docker-compose -f ./docker/docker-compose.yml build --no-cache
 docker-compose -f ./docker/docker-compose.yml up -d
 
 # Enter container for debugging
-docker-compose -f ./docker/docker-compose.yml exec -u dsa stock-analyzer bash
+docker-compose -f ./docker/docker-compose.yml exec -u dsa equilytic bash
 
 # Manually run analysis once
-docker-compose -f ./docker/docker-compose.yml exec -u dsa stock-analyzer python main.py --no-notify
+docker-compose -f ./docker/docker-compose.yml exec -u dsa equilytic python main.py --no-notify
 ```
 
 ### 5. Data Persistence
@@ -101,14 +101,14 @@ sudo apt update
 sudo apt install -y python3.10 python3.10-venv python3-pip
 
 # Create virtual environment
-python3.10 -m venv /opt/stock-analyzer/venv
-source /opt/stock-analyzer/venv/bin/activate
+python3.10 -m venv /opt/equilytic/venv
+source /opt/equilytic/venv/bin/activate
 ```
 
 ### 2. Install Dependencies
 
 ```bash
-cd /opt/stock-analyzer
+cd /opt/equilytic
 pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
@@ -141,7 +141,7 @@ Create systemd service file for auto-start on boot and auto-restart:
 ### 1. Create Service File
 
 ```bash
-sudo vim /etc/systemd/system/stock-analyzer.service
+sudo vim /etc/systemd/system/equilytic.service
 ```
 
 Contents:
@@ -153,9 +153,9 @@ After=network.target
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/stock-analyzer
-Environment="PATH=/opt/stock-analyzer/venv/bin"
-ExecStart=/opt/stock-analyzer/venv/bin/python main.py --schedule
+WorkingDirectory=/opt/equilytic
+Environment="PATH=/opt/equilytic/venv/bin"
+ExecStart=/opt/equilytic/venv/bin/python main.py --schedule
 Restart=always
 RestartSec=30
 
@@ -170,16 +170,16 @@ WantedBy=multi-user.target
 sudo systemctl daemon-reload
 
 # Start service
-sudo systemctl start stock-analyzer
+sudo systemctl start equilytic
 
 # Enable auto-start on boot
-sudo systemctl enable stock-analyzer
+sudo systemctl enable equilytic
 
 # View status
-sudo systemctl status stock-analyzer
+sudo systemctl status equilytic
 
 # View logs
-journalctl -u stock-analyzer -f
+journalctl -u equilytic -f
 ```
 
 ---
@@ -241,7 +241,7 @@ os.environ["https_proxy"] = "http://your-proxy:port"
 docker-compose -f ./docker/docker-compose.yml logs -f --tail=100
 
 # Direct deployment
-tail -f /opt/stock-analyzer/logs/stock_analysis_*.log
+tail -f /opt/equilytic/logs/stock_analysis_*.log
 ```
 
 ### Health Check
@@ -251,17 +251,17 @@ tail -f /opt/stock-analyzer/logs/stock_analysis_*.log
 ps aux | grep main.py
 
 # Check recent reports
-ls -la /opt/stock-analyzer/reports/
+ls -la /opt/equilytic/reports/
 ```
 
 ### Routine Maintenance
 
 ```bash
 # Clean old logs (keep 7 days)
-find /opt/stock-analyzer/logs -mtime +7 -delete
+find /opt/equilytic/logs -mtime +7 -delete
 
 # Clean old reports (keep 30 days)
-find /opt/stock-analyzer/reports -mtime +30 -delete
+find /opt/equilytic/reports -mtime +30 -delete
 ```
 
 ---
@@ -283,7 +283,7 @@ Check proxy configuration, ensure server can access Gemini API.
 
 ```bash
 # Stop service then delete lock file
-rm /opt/stock-analyzer/data/*.lock
+rm /opt/equilytic/data/*.lock
 ```
 
 ### 4. Insufficient memory
@@ -304,14 +304,14 @@ Migrate from one server to another:
 
 ```bash
 # Source server: Package
-cd /opt/stock-analyzer
-tar -czvf stock-analyzer-backup.tar.gz .env data/ logs/ reports/
+cd /opt/equilytic
+tar -czvf equilytic-backup.tar.gz .env data/ logs/ reports/
 
 # Target server: Deploy
-mkdir -p /opt/stock-analyzer
-cd /opt/stock-analyzer
+mkdir -p /opt/equilytic
+cd /opt/equilytic
 git clone <your-repo-url> .
-tar -xzvf stock-analyzer-backup.tar.gz
+tar -xzvf equilytic-backup.tar.gz
 docker-compose -f ./docker/docker-compose.yml up -d
 ```
 
