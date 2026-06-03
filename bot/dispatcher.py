@@ -300,6 +300,10 @@ class CommandDispatcher:
             nl_result = self._try_nl_routing_sync(message)
             if nl_result is not None:
                 return nl_result
+            # 非命令、未命中金融意图：@/私聊一律转 /chat 让 Agent 对答
+            chat_result = self._chat_fallback_sync(message)
+            if chat_result is not None:
+                return chat_result
             if message.mentioned:
                 return BotResponse.text_response(
                     "你好！我是股票分析助手。\n"
@@ -338,7 +342,11 @@ class CommandDispatcher:
             nl_result = await self._try_nl_routing(message)
             if nl_result is not None:
                 return nl_result
-            # No NL match — check if @mentioned for a help hint
+            # 非命令、未命中金融意图：@/私聊一律转 /chat 让 Agent 对答
+            chat_result = await self._chat_fallback(message)
+            if chat_result is not None:
+                return chat_result
+            # No NL match and chat fallback disabled — check if @mentioned for a help hint
             if message.mentioned:
                 return BotResponse.text_response(
                     "你好！我是股票分析助手。\n"
@@ -382,36 +390,65 @@ You are a stock analysis assistant router.  Given a user's natural-language
 message, determine whether it contains a stock-analysis request.
 
 Return a JSON object (and NOTHING else) with these fields:
-- "intent": one of "analysis", "chat", "none"
-  * "analysis" → the user wants stock analysis / diagnosis / comparison
+- "intent": one of "analysis", "recommend", "market", "research", "batch", "chat", "none"
+  * "analysis" → the user wants analysis / diagnosis / comparison of SPECIFIC stock(s)
+  * "recommend" → the user wants stock recommendations / picks / screening
+    WITHOUT naming specific codes (e.g. "推荐几只股票", "有什么票能买", "选几只强势股")
+  * "market" → the user wants a MARKET REVIEW / 大盘复盘 / 行情总结 / 收盘总结 / 盘后总结
+    (e.g. "复盘一下今天大盘", "总结今天A股港股收盘", "大盘复盘")
+  * "research" → the user explicitly wants DEEP research / 深度研究 / 深挖 / 研报
+    on a topic, sector, or stock (e.g. "深度研究一下半导体板块", "深入研究宁德时代")
+  * "batch" → the user wants to batch-analyze their watchlist / 自选股 (e.g.
+    "把我的自选股都分析一遍", "批量分析自选股")
   * "chat" → the user is asking a general question related to finance
+    (a casual "今天大盘怎么样" is chat, NOT a full market review)
   * "none" → the message is irrelevant or you are unsure
 - "codes": a list of stock codes mentioned (may be empty).
   Format: A-share 6-digit ("600519"), HK with prefix ("hk00700"), US ticker uppercase ("AAPL").
 - "strategy": strategy/technique name if the user specified one, else null.
   e.g. "缠论", "MACD", "趋势跟踪", "chan_theory", etc.
+- "count": for "recommend" intent, the number of stocks requested as an integer,
+  else null. e.g. "推荐三只" → 3, "给我5只票" → 5.
 
 Examples:
 User: "帮我分析一下600519和000858"
-{"intent":"analysis","codes":["600519","000858"],"strategy":null}
+{"intent":"analysis","codes":["600519","000858"],"strategy":null,"count":null}
 
 User: "用缠论看看AAPL"
-{"intent":"analysis","codes":["AAPL"],"strategy":"缠论"}
+{"intent":"analysis","codes":["AAPL"],"strategy":"缠论","count":null}
+
+User: "帮我推荐三只股票"
+{"intent":"recommend","codes":[],"strategy":null,"count":3}
+
+User: "有什么强势股可以买"
+{"intent":"recommend","codes":[],"strategy":null,"count":null}
+
+User: "复盘一下今天大盘"
+{"intent":"market","codes":[],"strategy":null,"count":null}
+
+User: "总结一下今天A股和港股收盘"
+{"intent":"market","codes":[],"strategy":null,"count":null}
+
+User: "深度研究一下半导体板块"
+{"intent":"research","codes":[],"strategy":null,"count":null}
+
+User: "把我的自选股都分析一遍"
+{"intent":"batch","codes":[],"strategy":null,"count":null}
 
 User: "今天大盘怎么样"
-{"intent":"chat","codes":[],"strategy":null}
+{"intent":"chat","codes":[],"strategy":null,"count":null}
 
 User: "明天天气如何"
-{"intent":"none","codes":[],"strategy":null}
+{"intent":"none","codes":[],"strategy":null,"count":null}
 
 User: "600519"
-{"intent":"analysis","codes":["600519"],"strategy":null}
+{"intent":"analysis","codes":["600519"],"strategy":null,"count":null}
 
 User: "帮我分析茅台"
-{"intent":"analysis","codes":[],"strategy":null}
+{"intent":"analysis","codes":[],"strategy":null,"count":null}
 
 User: "analyze TSLA and NVDA using trend strategy"
-{"intent":"analysis","codes":["TSLA","NVDA"],"strategy":"trend"}
+{"intent":"analysis","codes":["TSLA","NVDA"],"strategy":"trend","count":null}
 """
 
     # Cheap pre-filter: only invoke LLM when the message plausibly contains
@@ -427,7 +464,9 @@ User: "analyze TSLA and NVDA using trend strategy"
         r'|分析|看看|查一?下|研究|诊断|怎么样|走势|趋势'
         r'|能买|可以买|涨还是跌|怎么看|能追|建议|目标价'
         r'|支撑|压力|阻力|止损|买点|卖点|技术面|基本面|筹码'
-        r'|(?i:analyz|stock|buy|sell|trend|backtest|strateg)',
+        r'|推荐|荐股|选股|有什么票|强势股|龙头'
+        r'|复盘|大盘|行情|收盘|盘后|总结|深度研究|深研|深挖|研报|研究|批量|自选股'
+        r'|(?i:analyz|stock|buy|sell|trend|backtest|strateg|recommend|pick|market|research)',
     )
 
     _NL_NAME_CLEANUP_PATTERNS = (
@@ -510,6 +549,42 @@ User: "analyze TSLA and NVDA using trend strategy"
             if resolved_code:
                 codes = [resolved_code]
 
+        # "recommend" intent → route to /recommend with optional count
+        if intent == "recommend":
+            rec_cmd = self.get_command("recommend")
+            if rec_cmd:
+                count = parsed.get("count")
+                args = [str(int(count))] if isinstance(count, (int, float)) and count else []
+                logger.info("[Dispatcher] NL routing → /recommend %s", args)
+                return await rec_cmd.execute_async(message, args)
+            return None
+
+        # "market" intent → route to /market (大盘复盘)
+        if intent == "market":
+            market_cmd = self.get_command("market")
+            if market_cmd:
+                logger.info("[Dispatcher] NL routing → /market")
+                return await market_cmd.execute_async(message, [])
+            return None
+
+        # "research" intent → route to /research with the original text as topic
+        if intent == "research":
+            research_cmd = self.get_command("research")
+            if research_cmd:
+                logger.info("[Dispatcher] NL routing → /research: %s", text[:60])
+                return await research_cmd.execute_async(message, text.split())
+            return None
+
+        # "batch" intent → route to /batch with optional count
+        if intent == "batch":
+            batch_cmd = self.get_command("batch")
+            if batch_cmd:
+                count = parsed.get("count")
+                args = [str(int(count))] if isinstance(count, (int, float)) and count else []
+                logger.info("[Dispatcher] NL routing → /batch %s", args)
+                return await batch_cmd.execute_async(message, args)
+            return None
+
         # "chat" intent → route to /chat with original text
         if intent == "chat":
             chat_cmd = self.get_command("chat")
@@ -576,6 +651,38 @@ User: "analyze TSLA and NVDA using trend strategy"
             if resolved_code:
                 codes = [resolved_code]
 
+        if intent == "recommend":
+            rec_cmd = self.get_command("recommend")
+            if rec_cmd:
+                count = parsed.get("count")
+                args = [str(int(count))] if isinstance(count, (int, float)) and count else []
+                logger.info("[Dispatcher] NL routing → /recommend %s", args)
+                return rec_cmd.execute(message, args)
+            return None
+
+        if intent == "market":
+            market_cmd = self.get_command("market")
+            if market_cmd:
+                logger.info("[Dispatcher] NL routing → /market")
+                return market_cmd.execute(message, [])
+            return None
+
+        if intent == "research":
+            research_cmd = self.get_command("research")
+            if research_cmd:
+                logger.info("[Dispatcher] NL routing → /research: %s", text[:60])
+                return research_cmd.execute(message, text.split())
+            return None
+
+        if intent == "batch":
+            batch_cmd = self.get_command("batch")
+            if batch_cmd:
+                count = parsed.get("count")
+                args = [str(int(count))] if isinstance(count, (int, float)) and count else []
+                logger.info("[Dispatcher] NL routing → /batch %s", args)
+                return batch_cmd.execute(message, args)
+            return None
+
         if intent == "chat":
             chat_cmd = self.get_command("chat")
             if chat_cmd:
@@ -600,6 +707,42 @@ User: "analyze TSLA and NVDA using trend strategy"
             return ask_cmd.execute(message, args)
 
         return None
+
+    def _should_chat_fallback(self, message: BotMessage) -> bool:
+        """Whether a non-command message should fall back to the /chat Agent.
+
+        Only when ``AGENT_MODE=true`` and the message is a private chat or an
+        @mention — so we never hijack unrelated group chatter.
+        """
+        from src.config import get_config
+
+        config = get_config()
+        if not getattr(config, 'agent_mode', False):
+            return False
+        is_private = message.chat_type.value == "private"
+        if not is_private and not message.mentioned:
+            return False
+        return bool((message.content or "").strip())
+
+    def _chat_fallback_sync(self, message: BotMessage) -> Optional[BotResponse]:
+        """Route a non-command @/private message to /chat (sync path)."""
+        if not self._should_chat_fallback(message):
+            return None
+        chat_cmd = self.get_command("chat")
+        if not chat_cmd:
+            return None
+        logger.info("[Dispatcher] 非命令消息回退 → /chat: %s", message.content[:60])
+        return chat_cmd.execute(message, [message.content.strip()])
+
+    async def _chat_fallback(self, message: BotMessage) -> Optional[BotResponse]:
+        """Route a non-command @/private message to /chat (async path)."""
+        if not self._should_chat_fallback(message):
+            return None
+        chat_cmd = self.get_command("chat")
+        if not chat_cmd:
+            return None
+        logger.info("[Dispatcher] 非命令消息回退 → /chat: %s", message.content[:60])
+        return await chat_cmd.execute_async(message, [message.content.strip()])
 
     @staticmethod
     async def _parse_intent_via_llm(text: str, config) -> Optional[dict]:

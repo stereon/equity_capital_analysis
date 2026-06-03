@@ -23,6 +23,7 @@ https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/server-side-sdk/python--sd
 
 import json
 import logging
+import os
 import threading
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
@@ -31,6 +32,11 @@ from typing import Optional, Callable
 import time
 
 logger = logging.getLogger(__name__)
+
+# “思考中”表情回应使用的 emoji_type（飞书合法枚举，"THINKING" = 🤔 思考脸；
+# 注意飞书该枚举大小写不统一，思考脸是全大写 THINKING）
+# 可用 FEISHU_THINKING_EMOJI 覆盖（其它合法值如 OnIt / Typing / OneSecond）
+THINKING_EMOJI_TYPE = os.getenv("FEISHU_THINKING_EMOJI", "THINKING")
 
 # 尝试导入飞书 SDK
 try:
@@ -42,6 +48,10 @@ try:
         ReplyMessageRequestBody,
         CreateMessageRequest,
         CreateMessageRequestBody,
+        CreateMessageReactionRequest,
+        CreateMessageReactionRequestBody,
+        DeleteMessageReactionRequest,
+        Emoji,
     )
 
     FEISHU_SDK_AVAILABLE = True
@@ -80,6 +90,81 @@ class FeishuReplyClient:
         # 获取配置的最大字节数
         config = get_config()
         self._max_bytes = getattr(config, 'feishu_max_bytes', 20000)
+
+        # 本机器人 open_id（用于判断群里 @ 的是否是自己），首次用到时拉取并缓存
+        self._bot_open_id: Optional[str] = None
+
+    def get_bot_open_id(self) -> Optional[str]:
+        """返回本机器人的 open_id（懒加载缓存）。失败返回 None，下次再试。"""
+        if self._bot_open_id:
+            return self._bot_open_id
+        try:
+            request = lark.BaseRequest.builder() \
+                .http_method(lark.HttpMethod.GET) \
+                .uri("/open-apis/bot/v3/info") \
+                .token_types({lark.AccessTokenType.TENANT}) \
+                .build()
+            response = self._client.request(request)
+            if not response.success():
+                logger.warning(
+                    "[Feishu Stream] 获取机器人信息失败: code=%s",
+                    getattr(response, "code", None),
+                )
+                return None
+            body = json.loads(response.raw.content.decode("utf-8"))
+            self._bot_open_id = (body.get("bot") or {}).get("open_id") or None
+            if self._bot_open_id:
+                logger.info("[Feishu Stream] 机器人 open_id: %s", self._bot_open_id)
+            return self._bot_open_id
+        except Exception as e:  # 网络/解析失败不影响主流程
+            logger.warning("[Feishu Stream] 获取机器人 open_id 异常: %s", e)
+            return None
+
+    def add_reaction(self, message_id: str, emoji_type: str) -> Optional[str]:
+        """给指定消息加表情回应，返回 reaction_id（失败返回 None，不影响主流程）。"""
+        if not message_id:
+            return None
+        try:
+            request = CreateMessageReactionRequest.builder() \
+                .message_id(message_id) \
+                .request_body(
+                    CreateMessageReactionRequestBody.builder()
+                    .reaction_type(Emoji.builder().emoji_type(emoji_type).build())
+                    .build()
+                ) \
+                .build()
+            response = self._client.im.v1.message_reaction.create(request)
+            if not response.success():
+                logger.warning(
+                    "[Feishu Stream] 添加表情回应失败: code=%s, msg=%s",
+                    response.code, response.msg,
+                )
+                return None
+            return getattr(response.data, "reaction_id", None)
+        except Exception as e:
+            logger.warning("[Feishu Stream] 添加表情回应异常: %s", e)
+            return None
+
+    def delete_reaction(self, message_id: str, reaction_id: str) -> bool:
+        """删除指定消息的表情回应（失败仅记日志，不影响主流程）。"""
+        if not message_id or not reaction_id:
+            return False
+        try:
+            request = DeleteMessageReactionRequest.builder() \
+                .message_id(message_id) \
+                .reaction_id(reaction_id) \
+                .build()
+            response = self._client.im.v1.message_reaction.delete(request)
+            if not response.success():
+                logger.warning(
+                    "[Feishu Stream] 删除表情回应失败: code=%s, msg=%s",
+                    response.code, response.msg,
+                )
+                return False
+            return True
+        except Exception as e:
+            logger.warning("[Feishu Stream] 删除表情回应异常: %s", e)
+            return False
 
     def _send_interactive_card(self, content: str, message_id: Optional[str] = None,
                                chat_id: Optional[str] = None,
@@ -331,8 +416,21 @@ class FeishuStreamHandler:
 
             self._process_message(bot_message)
 
+    def _should_indicate_thinking(self, bot_message: BotMessage) -> bool:
+        """仅对“确实会回应”的消息显示思考中表情：命令 / @我 / 私聊。"""
+        return (
+            bot_message.mentioned
+            or bot_message.chat_type == ChatType.PRIVATE
+            or bot_message.is_command()
+        )
+
     def _process_message(self, bot_message: BotMessage) -> None:
         """Execute command handling off the SDK callback thread."""
+        reaction_id: Optional[str] = None
+        if self._should_indicate_thinking(bot_message):
+            reaction_id = self._reply_client.add_reaction(
+                bot_message.message_id, THINKING_EMOJI_TYPE
+            )
         try:
             response = self._on_message(bot_message)
 
@@ -346,6 +444,10 @@ class FeishuStreamHandler:
         except Exception as e:
             self._logger.error(f"[Feishu Stream] 异步处理消息失败: {e}")
             self._logger.exception(e)
+        finally:
+            # 出结果（或异常）后撤掉“思考中”表情
+            if reaction_id:
+                self._reply_client.delete_reaction(bot_message.message_id, reaction_id)
 
     @staticmethod
     def _truncate_log_content(text: str, max_len: int = 200) -> str:
@@ -391,6 +493,24 @@ class FeishuStreamHandler:
             self._logger.error(f"[Feishu Stream] 处理消息失败: {e}")
             self._logger.exception(e)
 
+    def _is_self_mentioned(self, mentions) -> bool:
+        """判断 mentions 里是否 @ 了本机器人。
+
+        群消息会把 @ 其他机器人/成员的事件也推给我们，必须按 open_id 精确匹配，
+        否则会出现 @ 别的机器人时本机器人抢答的问题。
+        """
+        if not mentions:
+            return False
+        bot_open_id = self._reply_client.get_bot_open_id()
+        if not bot_open_id:
+            # 无法确定自身 open_id（接口异常）：退回保守旧判定，确保不漏掉对自己的 @
+            return True
+        for m in mentions:
+            mid = getattr(m, "id", None)
+            if mid is not None and getattr(mid, "open_id", None) == bot_open_id:
+                return True
+        return False
+
     def _parse_event_message(self, event: 'P2ImMessageReceiveV1') -> Optional[BotMessage]:
         """
         解析飞书事件消息为统一格式
@@ -425,7 +545,8 @@ class FeishuStreamHandler:
 
             # 提取命令（去除 @机器人）
             content = self._extract_command(raw_content, message_data.mentions)
-            mentioned = "@" in raw_content or bool(message_data.mentions)
+            # 仅当 @ 的确实是本机器人时才算被提及，避免群里 @ 其他机器人时抢答
+            mentioned = self._is_self_mentioned(message_data.mentions)
 
             # 获取发送者信息
             user_id = ""
@@ -599,12 +720,21 @@ class FeishuStreamClient:
         encrypt_key = getattr(config, 'feishu_encrypt_key', '') or ''
         verification_token = getattr(config, 'feishu_verification_token', '') or ''
 
+        # 机器人自身加/删表情会触发 reaction 事件回推；注册空 handler 吞掉，
+        # 避免 SDK 打 "processor not found" 的 ERROR 噪音。
+        def _ignore_reaction(event) -> None:
+            return None
+
         event_handler = lark.EventDispatcherHandler.builder(
             encrypt_key=encrypt_key,
             verification_token=verification_token,
             level=lark.LogLevel.WARNING
         ).register_p2_im_message_receive_v1(
             handler.handle_message
+        ).register_p2_im_message_reaction_created_v1(
+            _ignore_reaction
+        ).register_p2_im_message_reaction_deleted_v1(
+            _ignore_reaction
         ).build()
 
         return event_handler

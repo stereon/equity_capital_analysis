@@ -75,7 +75,11 @@ class BotMessage:
             如果不是命令，返回 (None, [])
         """
         text = self.content.strip()
-        
+
+        # 容错：用户常把帮助里的 "• /batch" 整条复制后发来，开头的项目符号/列表标记
+        # 会让命令识别失败。这里仅在命令识别用途上剥掉开头的项目符号，不改动原始 content。
+        text = text.lstrip("•·●○‣▪◦∙*-–—　 \t").strip()
+
         # 检查是否以命令前缀开头
         if not text.startswith(prefix):
             # 尝试匹配中文命令（无前缀）
