@@ -82,6 +82,17 @@ bun run dev     # http://localhost:5173
 
 生产构建：`bun run build`，产物在 `web/dist/`。
 
+## 部署上线
+
+生产部署推荐用 Docker Compose；也提供一键脚本与 systemd 模板：
+
+```bash
+docker-compose -f ./docker/docker-compose.yml up -d   # Docker Compose（推荐）
+APP_USER=$USER bash scripts/deploy/setup.sh            # 一键脚本：装依赖 / 建 venv / 构建前端 / 启用 systemd
+```
+
+完整的方案对比、systemd 服务模板（`scripts/deploy/equilytic.service`）、升级与排障见 [`docs/DEPLOY.md`](docs/DEPLOY.md)。
+
 ## 命令行入口
 
 ```bash
