@@ -30,6 +30,42 @@ logger = logging.getLogger(__name__)
 
 HS300_INDEX_CODE = "000300.SH"
 
+MARKET_A = "cn"
+MARKET_US = "us"
+
+# pool 名 -> 目标市场
+POOL_MARKET: Dict[str, str] = {
+    "hs300": MARKET_A,
+    "watchlist": MARKET_A,
+    "both": MARKET_A,
+    "all_a": MARKET_A,
+    "sp500": MARKET_US,
+}
+
+
+@dataclass
+class ScoringProfile:
+    """技术评分的市场相关参数。
+
+    其他评分项(MA 排列 / 量比 / 距 20 日高点)的阈值跨市场通用,不参数化。
+    """
+
+    name: str
+    # 5 日动量过热阈值:超过则判为"已涨多",转为负分。
+    # A 股大盘单日 ±10% 限制,5 日 15% 已偏激进;美股大盘股 5 日 15%+ 仍属正常。
+    momentum_strong_max: float = 15.0
+    # 单日 pct_chg 临近 A 股涨停板的惩罚阈值;美股无涨停板,设为 None 关闭。
+    daily_limit_threshold: Optional[float] = 9.5
+    daily_limit_penalty: int = 15
+
+
+A_SHARE_PROFILE = ScoringProfile(name="A_SHARE")
+US_PROFILE = ScoringProfile(
+    name="US",
+    momentum_strong_max=20.0,
+    daily_limit_threshold=None,
+)
+
 
 @dataclass
 class CandidateScore:
@@ -302,8 +338,197 @@ def _build_all_a_panel(pro, dates: List[str], emit=None) -> Dict[str, pd.DataFra
     return out
 
 
-def _score_stock(df: pd.DataFrame) -> Optional[CandidateScore]:
-    """对单股日 K 做技术评分。"""
+def _build_us_panel(
+    tickers: List[str],
+    days: int = 30,
+    emit=None,
+    chunk_size: int = 80,
+) -> Dict[str, pd.DataFrame]:
+    """批量拉美股近 N 个交易日日 K,返回 {ticker: 评分用 DataFrame}。
+
+    yfinance 支持一次请求多 ticker(group_by='ticker'),比逐只拉快 1-2 个数量级。
+    auto_adjust=True 让收盘价做复权,与 A 股 Tushare 行情可比。
+    """
+    import yfinance as yf
+
+    out: Dict[str, pd.DataFrame] = {}
+    total = len(tickers)
+    # 多取一些天数缓冲周末/节假日,确保最终能拿到 ≥ 20 个有效交易日
+    period = f"{max(days * 2 + 10, 60)}d"
+
+    for start in range(0, total, chunk_size):
+        batch = tickers[start:start + chunk_size]
+        done = min(start + len(batch), total)
+        if emit:
+            emit("fetch", done, total, f"拉取美股日K {done}/{total}")
+        try:
+            df = yf.download(
+                batch,
+                period=period,
+                progress=False,
+                auto_adjust=True,
+                group_by="ticker",
+                threads=True,
+            )
+        except Exception as e:
+            logger.warning(f"[Recommend] yfinance batch ({batch[0]}..) 失败: {e}")
+            continue
+        if df is None or df.empty:
+            continue
+
+        is_multi = hasattr(df.columns, "get_level_values")
+        for sym in batch:
+            try:
+                if is_multi:
+                    if sym not in df.columns.get_level_values(0):
+                        continue
+                    sub = df[sym].dropna(how="all")
+                else:
+                    sub = df.dropna(how="all")
+                if len(sub) < 20:
+                    continue
+
+                close = pd.to_numeric(sub["Close"], errors="coerce")
+                high = pd.to_numeric(sub["High"], errors="coerce")
+                volume = pd.to_numeric(sub["Volume"], errors="coerce")
+                g = pd.DataFrame({
+                    "code": sym,
+                    "date": [str(i.date()) if hasattr(i, "date") else str(i) for i in sub.index],
+                    "close": close.values,
+                    "high": high.values,
+                    "volume": volume.values,
+                })
+                g["pct_chg"] = g["close"].pct_change() * 100
+                g["ma5"] = g["close"].rolling(5).mean()
+                g["ma10"] = g["close"].rolling(10).mean()
+                g["ma20"] = g["close"].rolling(20).mean()
+                vol_ma5 = g["volume"].rolling(5).mean()
+                g["volume_ratio"] = (g["volume"] / vol_ma5).round(2)
+                out[sym] = g.tail(days).reset_index(drop=True)
+            except Exception as e:
+                logger.debug(f"[Recommend] {sym} 面板构建失败: {e}")
+                continue
+
+    logger.info(f"[Recommend] 美股面板构建完成: {len(out)}/{total}")
+    return out
+
+
+def _compute_us_hot_sectors(
+    panel: Dict[str, pd.DataFrame],
+    sector_map: Dict[str, str],
+    top_n: int = 5,
+) -> List[str]:
+    """从面板按 GICS sector 聚合最新一天平均 pct_chg,取领涨 top_n。
+
+    直接复用已有面板,避免再请求第三方板块行情;sector 名是 GICS 英文原值,
+    便于后续 _match_sector 做精确匹配。
+    """
+    by_sector: Dict[str, List[float]] = {}
+    for ticker, df in panel.items():
+        if df is None or df.empty:
+            continue
+        sector = sector_map.get(ticker, "")
+        if not sector:
+            continue
+        last_chg = df.iloc[-1].get("pct_chg")
+        if pd.isna(last_chg):
+            continue
+        by_sector.setdefault(sector, []).append(float(last_chg))
+
+    ranked = [(s, sum(v) / len(v)) for s, v in by_sector.items() if v]
+    ranked.sort(key=lambda x: x[1], reverse=True)
+    return [name for name, _ in ranked[:top_n]]
+
+
+def _recommend_us_sp500(
+    top_n: int,
+    manager: DataFetcherManager,
+    emit,
+) -> Dict[str, Any]:
+    """S&P 500 池技术选股。沿用与 A 股相同的评分骨架,但走 US_PROFILE。"""
+    from data_provider.us_universe import get_sp500_constituents
+
+    emit("pool", 0, 0, "拉取 S&P 500 成分")
+    universe = get_sp500_constituents()
+    if not universe:
+        logger.warning("[Recommend] S&P 500 成分不可用")
+        _write_report([], [], "SP500", 0)
+        return {
+            "hot_sectors": [],
+            "candidates": [],
+            "report_path": None,
+            "pool_size": 0,
+            "status": "data_unavailable",
+        }
+
+    tickers = [it["ticker"] for it in universe if it.get("ticker")]
+    sector_map = {it["ticker"]: it.get("sector", "") for it in universe}
+    name_map = {it["ticker"]: it.get("name", "") for it in universe}
+    pool_label = "SP500"
+
+    panel = _build_us_panel(tickers, days=30, emit=emit)
+    if not panel:
+        logger.warning("[Recommend] 美股面板为空,疑似 yfinance 限频/不可达")
+        _write_report([], [], pool_label, len(tickers))
+        return {
+            "hot_sectors": [],
+            "candidates": [],
+            "report_path": None,
+            "pool_size": len(tickers),
+            "status": "data_unavailable",
+        }
+
+    hot_sectors = _compute_us_hot_sectors(panel, sector_map, top_n=5)
+    logger.info(f"[Recommend] 美股领涨板块: {hot_sectors}")
+
+    candidates: List[CandidateScore] = []
+    items = list(panel.items())
+    total = len(items)
+    for i, (ticker, df) in enumerate(items, 1):
+        if i % 50 == 0 or i == total:
+            emit("score", i, total, f"评分中 {i}/{total}")
+        cs = _score_stock(df, profile=US_PROFILE)
+        if cs is None:
+            continue
+        cs.code = ticker
+        cs.name = name_map.get(ticker, "")
+        cs.industry = sector_map.get(ticker, "")
+        if cs.industry and cs.industry in hot_sectors:
+            cs.sector_match = cs.industry
+            cs.score += 10
+            cs.signals.append(f"热门板块:{cs.industry}")
+        candidates.append(cs)
+
+    candidates.sort(key=lambda c: c.score, reverse=True)
+    top = candidates[:top_n]
+    logger.info(f"[Recommend] 美股评分完成,有效 {len(candidates)},Top {len(top)}")
+
+    price_as_of = _enrich_with_realtime(manager, top)
+
+    report_path = _write_report(hot_sectors, top, pool_label, len(tickers), price_as_of)
+    markdown = _render_recommendation_markdown(hot_sectors, top, pool_label, len(tickers), price_as_of)
+    query_id = _persist_history(
+        candidates=top,
+        hot_sectors=hot_sectors,
+        pool_label=pool_label,
+        pool_size=len(tickers),
+        price_as_of=price_as_of,
+        markdown=markdown,
+    )
+
+    return {
+        "hot_sectors": hot_sectors,
+        "candidates": [c.__dict__ for c in top],
+        "report_path": str(report_path) if report_path else None,
+        "pool_size": len(tickers),
+        "price_as_of": price_as_of,
+        "query_id": query_id,
+        "status": "ok",
+    }
+
+
+def _score_stock(df: pd.DataFrame, profile: ScoringProfile = A_SHARE_PROFILE) -> Optional[CandidateScore]:
+    """对单股日 K 做技术评分。profile 控制市场相关的阈值。"""
     if df is None or len(df) < 20:
         return None
     last = df.iloc[-1]
@@ -334,10 +559,10 @@ def _score_stock(df: pd.DataFrame) -> Optional[CandidateScore]:
         prev = float(df.iloc[-6]["close"])
         if prev > 0:
             ret5 = (close - prev) / prev * 100
-            if 0 < ret5 < 15:
+            if 0 < ret5 < profile.momentum_strong_max:
                 score += 15
                 signals.append(f"5日{ret5:+.1f}%")
-            elif ret5 >= 15:
+            elif ret5 >= profile.momentum_strong_max:
                 score -= 10
                 signals.append(f"5日{ret5:+.1f}%(已涨多)")
             elif ret5 <= -5:
@@ -365,10 +590,10 @@ def _score_stock(df: pd.DataFrame) -> Optional[CandidateScore]:
         elif ratio < 0.85:
             score -= 5
 
-    # 5. 临近涨停/跌停(惩罚追高)
+    # 5. 临近涨停/跌停(惩罚追高,仅 A 股有涨跌停板)
     chg = float(last.get("pct_chg") or 0)
-    if chg >= 9.5:
-        score -= 15
+    if profile.daily_limit_threshold is not None and chg >= profile.daily_limit_threshold:
+        score -= profile.daily_limit_penalty
         signals.append(f"今日{chg:+.1f}%(临近涨停)")
 
     return CandidateScore(
@@ -517,6 +742,12 @@ def recommend(
             pass  # 进度回调失败不阻断主流程
 
     manager = DataFetcherManager()
+    pool_norm = (pool or "hs300").lower()
+
+    # 美股池(目前仅 sp500)不依赖 Tushare,提前分派出去
+    if POOL_MARKET.get(pool_norm) == MARKET_US:
+        return _recommend_us_sp500(top_n=top_n, manager=manager, emit=_emit)
+
     pro = _load_tushare_pro()
     if pro is None:
         logger.error("[Recommend] 未配置 TUSHARE_TOKEN,候选股推荐依赖 Tushare 拉数据/行业,无法继续")
@@ -534,7 +765,6 @@ def recommend(
 
     # 2. 候选池
     _emit("pool", 0, 0, "构建候选股池")
-    pool_norm = (pool or "hs300").lower()
     all_a_panel: Optional[Dict[str, pd.DataFrame]] = None
     if pool_norm == "all_a":
         # 全 A 股:按交易日批量拉全市场,避免逐只 5000+ 次请求

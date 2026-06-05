@@ -306,9 +306,9 @@ def parse_arguments() -> argparse.Namespace:
 
     parser.add_argument(
         '--recommend-pool',
-        choices=['hs300', 'watchlist', 'both'],
+        choices=['hs300', 'watchlist', 'both', 'sp500'],
         default='hs300',
-        help='--recommend 模式候选池:hs300 / watchlist / both(默认 hs300)'
+        help='--recommend 模式候选池:hs300 / watchlist / both / sp500(默认 hs300)'
     )
 
     parser.add_argument(
