@@ -217,7 +217,13 @@ class RecommendCommand(BotCommand):
         lines.append("")
 
         if not candidates:
-            lines.append("未筛出符合条件的候选（可能今日普遍走弱或数据源受限）。")
+            if result.get("status") == "data_unavailable":
+                lines.append(
+                    "⚠️ 数据源（Tushare）限频或暂时不可用，未能拉取全市场行情，并非今日无机会。"
+                    "请隔 1~2 分钟再发一次 `/recommend`。"
+                )
+            else:
+                lines.append("未筛出符合条件的候选（可能今日普遍走弱或数据源受限）。")
             return "\n".join(lines)
 
         for i, c in enumerate(candidates, 1):

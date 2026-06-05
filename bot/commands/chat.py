@@ -97,7 +97,9 @@ class ChatCommand(BotCommand):
             result = executor.chat(message=user_message, session_id=session_id)
             
             if result.success:
-                return BotResponse.text_response(result.content)
+                return BotResponse.text_response(
+                    result.content + self.build_model_footer(result.model, config)
+                )
             else:
                 return BotResponse.text_response(f"⚠️ 对话失败: {result.error}")
                 

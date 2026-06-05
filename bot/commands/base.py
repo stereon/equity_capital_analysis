@@ -134,3 +134,28 @@ class BotCommand(ABC):
     def get_help_text(self) -> str:
         """获取帮助文本"""
         return f"**{self.name}** - {self.description}\n用法: `{self.usage}`"
+
+    def build_model_footer(self, model: Optional[str], config) -> str:
+        """构造"分析模型: xxx"脚注，受 REPORT_SHOW_LLM_MODEL 控制。
+
+        与 src/notification.py 的报告脚注格式保持一致，复用同一套
+        normalize_model_used / report 标签。当开关关闭或拿不到可用模型名
+        （占位/空值）时返回空字符串，调用方可无条件拼接。
+
+        Args:
+            model: Agent 实际使用的模型名（AgentResult.model，可能逗号分隔含 fallback）
+            config: 运行配置（读取 report_show_llm_model / report_language）
+
+        Returns:
+            形如 "\n\n*分析模型: deepseek/deepseek-v4-pro*" 的脚注，或空字符串
+        """
+        if not getattr(config, "report_show_llm_model", True):
+            return ""
+        from src.utils.data_processing import normalize_model_used
+        from src.report_language import get_report_labels
+
+        model_used = normalize_model_used(model)
+        if not model_used:
+            return ""
+        label = get_report_labels(getattr(config, "report_language", "zh"))["analysis_model_label"]
+        return f"\n\n*{label}: {model_used}*"

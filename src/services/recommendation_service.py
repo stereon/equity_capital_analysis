@@ -216,23 +216,45 @@ def _fetch_daily(pro, symbol: str, days: int = 30) -> Optional[pd.DataFrame]:
         return None
 
 
-def _get_recent_trade_dates(pro, n: int = 30) -> List[str]:
+def _get_recent_trade_dates(
+    pro,
+    n: int = 30,
+    *,
+    min_required: int = 20,
+    max_attempts: int = 3,
+) -> List[str]:
     """取最近 n 个开市交易日(升序),用于全市场批量取数。
 
     用一只始终交易的权重股(平安银行 000001.SZ)的日 K 反推交易日,
     避免 Tushare trade_cal 接口的低频限制(部分套餐 1 次/小时)。
+
+    Tushare 限频时该接口可能返回被截断的结果(例如仅 1 行)而**不报错**,
+    会导致全市场面板按极少天数构建、所有个股因不足 20 日被跳过 → 候选池为空。
+    因此当拿到的交易日数明显不足(< min_required)时重试几次;若多次仍不足,
+    返回已有结果,由调用方据此判定为数据源不可用(而非"今日无符合候选")。
     """
-    try:
-        end = datetime.now().strftime("%Y%m%d")
-        start = (datetime.now() - timedelta(days=n * 2 + 40)).strftime("%Y%m%d")
-        df = pro.daily(ts_code="000001.SZ", start_date=start, end_date=end)
-        if df is None or df.empty:
-            return []
-        dates = sorted(str(d) for d in df["trade_date"].dropna().tolist())
-        return dates[-n:]
-    except Exception as e:
-        logger.warning(f"[Recommend] 交易日列表获取失败: {e}")
-        return []
+    import time
+
+    last: List[str] = []
+    for attempt in range(1, max_attempts + 1):
+        try:
+            end = datetime.now().strftime("%Y%m%d")
+            start = (datetime.now() - timedelta(days=n * 2 + 40)).strftime("%Y%m%d")
+            df = pro.daily(ts_code="000001.SZ", start_date=start, end_date=end)
+            if df is not None and not df.empty:
+                dates = sorted(str(d) for d in df["trade_date"].dropna().tolist())
+                last = dates[-n:]
+                if len(last) >= min(n, min_required):
+                    return last
+                logger.warning(
+                    "[Recommend] 交易日仅取到 %d 个(期望≥%d),疑似 Tushare 限频截断,重试 %d/%d",
+                    len(last), min(n, min_required), attempt, max_attempts,
+                )
+        except Exception as e:
+            logger.warning(f"[Recommend] 交易日列表获取失败(第 {attempt} 次): {e}")
+        if attempt < max_attempts:
+            time.sleep(1.5 * attempt)
+    return last
 
 
 def _build_all_a_panel(pro, dates: List[str], emit=None) -> Dict[str, pd.DataFrame]:
@@ -527,9 +549,22 @@ def recommend(
         codes = _build_pool(pool_norm, hs300, user_list)
         pool_label = {"hs300": "HS300", "watchlist": "WATCHLIST", "both": "HS300 + WATCHLIST"}.get(pool_norm, pool_norm)
     if not codes:
-        logger.warning("[Recommend] 候选池为空")
+        # 全 A 股池为空 ≠ 今日无符合候选:全市场恒有数千只,空池只可能是
+        # 交易日/面板取数失败(多为 Tushare 限频)。据此回传可区分的 status,
+        # 让上层给出"数据源限频,请稍后重试"而非误导性的"未筛出候选"。
+        if pool_norm == "all_a":
+            logger.warning("[Recommend] 全 A 股面板为空,疑似 Tushare 限频/数据源暂不可用")
+            status = "data_unavailable"
+        else:
+            logger.warning("[Recommend] 候选池为空")
+            status = "empty_pool"
         _write_report(sector_names, [], pool_label, 0)
-        return {"hot_sectors": sector_names, "candidates": [], "report_path": None}
+        return {
+            "hot_sectors": sector_names,
+            "candidates": [],
+            "report_path": None,
+            "status": status,
+        }
     logger.info(f"[Recommend] 候选池 {pool_label}: {len(codes)} 只股票")
 
     # 3. 行业/名称 maps(Tushare 接口被限频时降级为空,用 manager 兜底取名)
@@ -593,6 +628,7 @@ def recommend(
         "pool_size": len(codes),
         "price_as_of": price_as_of,
         "query_id": query_id,
+        "status": "ok",
     }
 
 

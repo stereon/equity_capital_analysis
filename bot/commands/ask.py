@@ -248,7 +248,8 @@ class AskCommand(BotCommand):
             if result.success:
                 skill_name = self._resolve_skill_name(skill_id)
                 header = f"📊 {code} | 技能: {skill_name}\n{'─' * 30}\n"
-                return BotResponse.text_response(header + result.content)
+                footer = self.build_model_footer(result.model, config)
+                return BotResponse.text_response(header + result.content + footer)
             return BotResponse.text_response(f"⚠️ 分析失败: {result.error}")
 
         except Exception as exc:
