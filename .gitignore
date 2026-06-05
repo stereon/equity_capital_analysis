@@ -71,6 +71,9 @@ htmlcov/
 
 local/
 
+# 本地起停脚本产物（PID / 日志）
+.run/
+
 run.sh
 
 verify_*.py

@@ -73,6 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - [文档] `docs/DEPLOY.md` Systemd 方案更新为「Claude shim + 主服务」双 unit 流程并补登录/端口说明；新增 `scripts/deploy/*.service` 模板；修复 `docker/Dockerfile` 前端构建阶段（`apps/dsa-web`→`web/`，bun 构建并托管 `web/dist`）。
 - [chore] 新增一键部署脚本 `scripts/deploy/setup.sh`（装依赖/建 venv/构建前端/安装启用 systemd，参数化 APP_DIR/USER/PORT/本地Claude）；systemd 服务与容器命名由 `stock-analyzer` 统一改为 `equilytic`（服务 `equilytic` / `equilytic-shim`，安装目录 `/opt/equilytic`）。
 - [修复] `scripts/deploy/setup.sh` 在 Ubuntu 24.04(Noble) 因默认源无 `python3.11` 安装失败；改为自动解析 Python 解释器（优先 3.11，缺失时尝试 deadsnakes，再回退系统 `python3>=3.11`），新增 `PYTHON_BIN` 覆盖变量，并同步 `docs/DEPLOY.md`。
+- [新功能] 新增 `scripts/deploy.sh` 本地开发起停脚本（`start`/`stop`/`restart`/`status`/`logs`，支持 `--no-shim`/`--host`/`--port`/`--force`），统一管理 Claude shim、FastAPI 后端与 Vite 前端三服务，PID 与日志集中在 `.run/`。
 
 ## [3.18.0] - 2026-05-21
 
