@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 <!-- 新条目格式：- [类型] 描述（类型取值：新功能/改进/修复/文档/测试/chore）-->
 <!-- 每条独立一行追加到本段末尾，无需分类标题，合并时冲突最小 -->
+- [新功能] `/recommend` 选股推荐新增美股池 `sp500`：CLI `--recommend-pool sp500`、API `/recommend?pool=sp500`、Bot `/recommend us [N]`；universe 取自 Wikipedia S&P 500 成分（本地 7d 缓存兜底），日 K 走 yfinance 批量下载，技术评分通过 `ScoringProfile` 参数化（剥离 A 股 9.5% 涨停惩罚、5 日动量过热阈值放宽到 20%），热门板块基于面板按 GICS sector 聚合。
 - [新功能] Web 设置页飞书区块在 `FEISHU_APP_ID` 字段下新增机器人扫码入口：已配置 App ID 时展示「飞书 App 扫码打开机器人会话」二维码（AppLink，飞书 3.40+）与复制链接；未配置时展示「前往飞书开放平台创建自建应用」引导。纯前端实现，不改后端 / schema / 机器人逻辑。
 - [改进] `FEISHU_STREAM_ENABLED` 注册为 Web 设置页可编辑布尔开关（notification 分类，标记 `restart_required`），无需再手改 `.env` 即可开启飞书 Stream 机器人。
 - [新功能] 新增飞书 Stream 机器人状态接口 `GET /api/v1/system/config/feishu/stream-status`（只读：启用/凭证/运行状态）与凭证测试接口 `POST /api/v1/system/config/feishu/test-stream`（校验 App ID/Secret）；设置页在 `FEISHU_STREAM_ENABLED` 下展示连接状态徽标与「测试凭证」按钮。

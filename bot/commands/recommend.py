@@ -1,16 +1,20 @@
 # -*- coding: utf-8 -*-
 """
 ===================================
-荐股命令（全 A 股技术选股）
+荐股命令（A 股 / 美股技术选股）
 ===================================
 
-对全 A 股做批量技术评分（多头排列 / 动量 / 量比 / 距 20 日高点 + 热门板块加分），
+对候选池做批量技术评分（多头排列 / 动量 / 量比 / 距 20 日高点 + 热门板块加分），
 异步执行后把 Top N 候选推回来源会话。重活在后台，先回执再推送。
+
+支持市场：
+- 默认 / `cn` / `a` / `A股`：全 A 股 (pool=all_a)
+- `us` / `美股`：S&P 500 (pool=sp500)
 """
 
 import logging
 import threading
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from bot.commands.base import BotCommand
 from bot.models import BotMessage, BotResponse
@@ -27,9 +31,46 @@ DEEP_ANALYZE_MAX = 3
 # 单股全 skill 分析 ~150s；3 只即便本地 shim 串行也需留足预算
 DEEP_ANALYZE_TIMEOUT_S = 480.0
 
+# 市场别名 -> (market_key, pool, 中文展示名)
+_MARKET_ALIASES = {
+    "cn": ("cn", "all_a", "A 股"),
+    "a": ("cn", "all_a", "A 股"),
+    "ashare": ("cn", "all_a", "A 股"),
+    "a股": ("cn", "all_a", "A 股"),
+    "us": ("us", "sp500", "美股 (S&P 500)"),
+    "美股": ("us", "sp500", "美股 (S&P 500)"),
+    "sp500": ("us", "sp500", "美股 (S&P 500)"),
+    "spx": ("us", "sp500", "美股 (S&P 500)"),
+}
+
+
+def _parse_args(args: List[str]) -> Tuple[str, str, str, int, Optional[str]]:
+    """解析 `/recommend [market] [N]`。
+
+    返回 (market_key, pool, market_label, top_n, error_msg)。
+    error_msg 非 None 时,调用方应直接回错。
+    """
+    market_key, pool, market_label = "cn", "all_a", "A 股"
+    top_n = DEFAULT_TOP_N
+    remain = list(args)
+    if remain:
+        head = remain[0].strip().lower()
+        if head in _MARKET_ALIASES:
+            market_key, pool, market_label = _MARKET_ALIASES[head]
+            remain = remain[1:]
+    if remain:
+        try:
+            top_n = int(remain[0])
+        except (ValueError, TypeError):
+            return market_key, pool, market_label, DEFAULT_TOP_N, f"无效的数量: {remain[0]}"
+        if top_n <= 0:
+            return market_key, pool, market_label, DEFAULT_TOP_N, "数量必须大于 0"
+        top_n = min(top_n, MAX_TOP_N)
+    return market_key, pool, market_label, top_n, None
+
 
 class RecommendCommand(BotCommand):
-    """全 A 股技术选股推荐。"""
+    """A 股 / 美股技术选股推荐。"""
 
     @property
     def name(self) -> str:
@@ -41,29 +82,23 @@ class RecommendCommand(BotCommand):
 
     @property
     def description(self) -> str:
-        return "全 A 股技术选股推荐（多头排列 + 动量 + 量比 + 热门板块）"
+        return "A 股 / 美股技术选股推荐（多头排列 + 动量 + 量比 + 热门板块）"
 
     @property
     def usage(self) -> str:
-        return "/recommend [数量]"
+        return "/recommend [cn|us] [数量]"
 
     def execute(self, message: BotMessage, args: List[str]) -> BotResponse:
-        top_n = DEFAULT_TOP_N
-        if args:
-            try:
-                top_n = int(args[0])
-            except (ValueError, TypeError):
-                return BotResponse.error_response(f"无效的数量: {args[0]}")
-            if top_n <= 0:
-                return BotResponse.error_response("数量必须大于 0")
-            top_n = min(top_n, MAX_TOP_N)
+        market_key, pool, market_label, top_n, err = _parse_args(args)
+        if err is not None:
+            return BotResponse.error_response(err)
 
         if not _recommend_lock.acquire(blocking=False):
             return BotResponse.markdown_response("⚠️ 已有一个荐股任务正在执行，请稍后再试。")
 
         thread = threading.Thread(
             target=self._run_recommend,
-            args=(message, top_n),
+            args=(message, top_n, pool, market_label),
             daemon=True,
         )
         try:
@@ -74,17 +109,24 @@ class RecommendCommand(BotCommand):
             return BotResponse.error_response("荐股任务启动失败，请稍后重试")
 
         deep_n = min(top_n, DEEP_ANALYZE_MAX)
+        scope_desc = "全市场近 30 日行情" if pool == "all_a" else "S&P 500 成分近 30 日行情"
         return BotResponse.markdown_response(
-            f"✅ **荐股任务已启动**（全 A 股技术选股，Top {top_n}）\n\n"
+            f"✅ **荐股任务已启动**（{market_label} 技术选股，Top {top_n}）\n\n"
             "正在做：\n"
-            "• 拉取全市场近 30 日行情\n"
+            f"• 拉取{scope_desc}\n"
             "• 技术评分：多头排列 / 5 日动量 / 量比 / 距 20 日高点 + 热门板块\n"
             f"• 再对前 {deep_n} 只叠加全部策略 skill 做完整 AI 分析\n\n"
             "先推技术速览，再推深度分析，全程约几分钟。"
         )
 
-    def _run_recommend(self, message: BotMessage, top_n: int) -> None:
-        """后台执行全 A 股选股并把结果推回来源会话。"""
+    def _run_recommend(
+        self,
+        message: BotMessage,
+        top_n: int,
+        pool: str,
+        market_label: str,
+    ) -> None:
+        """后台执行选股并把结果推回来源会话。"""
         try:
             from src.config import get_config
             from src.notification import NotificationService
@@ -93,8 +135,8 @@ class RecommendCommand(BotCommand):
             config = get_config()
             watchlist = list(getattr(config, "stock_list", []) or [])
 
-            result = recommend(top_n=top_n, pool="all_a", watchlist=watchlist)
-            content = self._format_result(result, top_n)
+            result = recommend(top_n=top_n, pool=pool, watchlist=watchlist)
+            content = self._format_result(result, top_n, market_label, pool)
 
             notifier = NotificationService(source_message=message)
             notifier.send(content, email_send_to_all=True, route_type="report")
@@ -200,15 +242,16 @@ class RecommendCommand(BotCommand):
         return "\n".join(lines)
 
     @staticmethod
-    def _format_result(result: dict, top_n: int) -> str:
+    def _format_result(result: dict, top_n: int, market_label: str = "A 股", pool: str = "all_a") -> str:
         candidates = result.get("candidates", []) or []
         hot_sectors = result.get("hot_sectors", []) or []
         pool_size = result.get("pool_size")
         price_as_of = result.get("price_as_of")
 
-        lines: List[str] = [f"🎯 **全 A 股技术选股 Top {len(candidates)}**", ""]
+        lines: List[str] = [f"🎯 **{market_label}技术选股 Top {len(candidates)}**", ""]
         if pool_size:
-            lines.append(f"_筛选范围：全 A 股 {pool_size} 只_")
+            scope = "全 A 股" if pool == "all_a" else ("S&P 500" if pool == "sp500" else market_label)
+            lines.append(f"_筛选范围：{scope} {pool_size} 只_")
         if hot_sectors:
             lines.append("🔥 今日领涨板块：" + " / ".join(hot_sectors[:5]))
         lines.append(
@@ -218,9 +261,10 @@ class RecommendCommand(BotCommand):
 
         if not candidates:
             if result.get("status") == "data_unavailable":
+                src = "Tushare" if pool != "sp500" else "Yahoo Finance"
                 lines.append(
-                    "⚠️ 数据源（Tushare）限频或暂时不可用，未能拉取全市场行情，并非今日无机会。"
-                    "请隔 1~2 分钟再发一次 `/recommend`。"
+                    f"⚠️ 数据源（{src}）限频或暂时不可用，未能拉取行情，并非今日无机会。"
+                    "请隔 1~2 分钟再试一次。"
                 )
             else:
                 lines.append("未筛出符合条件的候选（可能今日普遍走弱或数据源受限）。")

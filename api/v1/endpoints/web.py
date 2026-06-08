@@ -230,7 +230,7 @@ class RecommendOut(BaseModel):
 @router.get("/recommend", response_model=RecommendOut)
 def get_recommendation(
     top: int = Query(10, ge=1, le=50, description="输出 Top N"),
-    pool: str = Query("hs300", pattern="^(hs300|watchlist|both)$", description="候选池"),
+    pool: str = Query("hs300", pattern="^(hs300|watchlist|both|sp500)$", description="候选池"),
 ) -> RecommendOut:
     """同步推荐(保留,适合 CLI / 脚本调用;HS300 池约 3-5 分钟)。前端推荐用 /recommend/start 异步版本。"""
     from src.services.recommendation_service import recommend
@@ -270,7 +270,7 @@ class RecommendStatusOut(BaseModel):
 @router.post("/recommend/start", response_model=RecommendStartOut)
 def start_recommendation(
     top: int = Query(10, ge=1, le=50),
-    pool: str = Query("hs300", pattern="^(hs300|watchlist|both)$"),
+    pool: str = Query("hs300", pattern="^(hs300|watchlist|both|sp500)$"),
 ) -> RecommendStartOut:
     """异步触发推荐;返回 task_id,前端通过 /recommend/status/{task_id} 轮询。"""
     _gc_recommend_tasks()
